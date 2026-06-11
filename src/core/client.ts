@@ -186,7 +186,7 @@ export class KesiApiClient {
 
   async getTableTags(tableId: string): Promise<any[]> {
     const res = await this.http.get(`/core/t/schema/tag/${tableId}`);
-    return res.data || [];
+    return res.data?.tags || res.data || [];
   }
 
   // ==================== 指令 ====================
