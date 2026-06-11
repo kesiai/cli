@@ -189,6 +189,22 @@ export class KesiApiClient {
     return res.data || [];
   }
 
+  // ==================== 指令 ====================
+
+  /** 获取单个表的指令列表 */
+  async getTableCommands(tableId: string): Promise<any[]> {
+    const res = await this.http.get(`/core/t/schema/command/${tableId}`);
+    return res.data || [];
+  }
+
+  /** 批量获取多个表的指令列表 */
+  async getTableCommandsBatch(tableIds: string[]): Promise<Record<string, any[]>> {
+    const res = await this.http.get('/core/t/schema/commands', {
+      params: { query: JSON.stringify(tableIds) },
+    });
+    return res.data || {};
+  }
+
   // ==================== 映射表 ====================
 
   /** 获取映射表的字段配置（从外部数据库同步） */

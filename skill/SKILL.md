@@ -385,6 +385,7 @@ kesi query-get <resource> <id>
 - 字段规则（交互规则+校验）：[references/table/field-rules.md](references/table/field-rules.md)
 - 24 种控件类型：[references/table/controls/](references/table/controls/)
 - 设备表详细配置：[references/device.md](references/device.md)
+- **查询语法参考**：[references/query-syntax.md](references/query-syntax.md) — 过滤操作符、分页、排序、完整示例
 
 ### formLayout + colSpan 规则
 

@@ -79,7 +79,109 @@ export async function describe(tableId: string, options: any): Promise<void> {
       result.table.totalRecords = 0;
     }
 
+    // 基于字段自动生成查询示例
+    result.queryExamples = buildQueryExamples(tableId, fields, result.tags);
+
     const format = resolveOutputFormat(options.output);
     console.log(formatOutput(result, format));
   });
+}
+
+/**
+ * 基于表字段自动生成查询示例
+ */
+function buildQueryExamples(tableId: string, fields: any[], _tags?: any[]): any[] {
+  const examples: any[] = [];
+  const fieldKeys = fields.map((f: any) => f.key);
+  const hasName = fieldKeys.includes('name');
+  const hasStatus = fieldKeys.includes('status');
+  const hasOnline = fieldKeys.includes('online');
+  const hasCreateTime = fieldKeys.includes('createTime');
+  const hasDisable = fieldKeys.includes('disable');
+  const hasType = fieldKeys.includes('type');
+
+  // 1. 基础查询
+  examples.push({
+    description: '基础查询（前10条）',
+    cli: `kesi records ${tableId} --limit 10`,
+    api: `GET /core/t/${tableId}/d?query={"limit":10,"withCount":true}`,
+    frontend: `api.query({ limit: 10 })`,
+  });
+
+  // 2. 模糊搜索（有 name 字段时）
+  if (hasName) {
+    examples.push({
+      description: '按名称模糊查询',
+      cli: `kesi records ${tableId} -f '{"name":{"$regex":"关键词"}}'`,
+      api: `GET /core/t/${tableId}/d?query={"filter":{"name":{"$regex":"关键词"}},"withCount":true}`,
+      frontend: `api.query({}, { name: { $regex: '关键词' } })`,
+    });
+  }
+
+  // 3. 精确过滤
+  if (hasStatus) {
+    examples.push({
+      description: '按状态精确过滤',
+      cli: `kesi records ${tableId} -f '{"status":{"$eq":"active"}}'`,
+      api: `GET /core/t/${tableId}/d?query={"filter":{"status":{"$eq":"active"}},"withCount":true}`,
+      frontend: `api.query({}, { status: { $eq: 'active' } })`,
+    });
+  }
+
+  // 4. 设备在线过滤
+  if (hasOnline) {
+    examples.push({
+      description: '查询在线设备',
+      cli: `kesi records ${tableId} -f '{"online":true}'`,
+      api: `GET /core/t/${tableId}/d?query={"filter":{"online":true},"withCount":true}`,
+      frontend: `api.query({}, { online: { $eq: true } })`,
+    });
+  }
+
+  // 5. 多条件组合
+  const multiConditions: string[] = [];
+  const multiFrontend: string[] = [];
+  if (hasOnline) {
+    multiConditions.push('"online":true');
+    multiFrontend.push('online: { $eq: true }');
+  }
+  if (hasDisable) {
+    multiConditions.push('"disable":{"$ne":true}');
+    multiFrontend.push('disable: { $ne: true }');
+  }
+  if (hasType) {
+    multiConditions.push('"type":{"$in":["sensor","gateway"]}');
+    multiFrontend.push('type: { $in: ["sensor", "gateway"] }');
+  }
+  if (multiConditions.length >= 2) {
+    const filter = '{' + multiConditions.join(',') + '}';
+    examples.push({
+      description: '多条件组合过滤',
+      cli: `kesi records ${tableId} -f '${filter}' -l 50`,
+      api: `GET /core/t/${tableId}/d?query={"filter":${filter},"limit":50,"withCount":true}`,
+      frontend: `api.query({ limit: 50 }, { ${multiFrontend.join(', ')} })`,
+    });
+  }
+
+  // 6. 排序 + 分页
+  if (hasCreateTime) {
+    examples.push({
+      description: '排序 + 分页',
+      cli: `kesi records ${tableId} -s '{"createTime":-1}' -l 20 --skip 0`,
+      api: `GET /core/t/${tableId}/d?query={"sort":{"createTime":-1},"skip":0,"limit":20,"withCount":true}`,
+      frontend: `api.query({ limit: 20, skip: 0, order: { createTime: 'DESC' } })`,
+    });
+  }
+
+  // 7. 计数
+  if (hasOnline) {
+    examples.push({
+      description: '统计在线设备数',
+      cli: `kesi records ${tableId} -f '{"online":true}' --limit 1 --with-count`,
+      api: `GET /core/t/${tableId}/d/count?query={"where":{"online":true}}`,
+      frontend: `api.count({ online: { $eq: true } })`,
+    });
+  }
+
+  return examples;
 }

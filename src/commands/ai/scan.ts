@@ -41,9 +41,32 @@ export async function scan(options: any): Promise<void> {
       // 获取属性点（仅设备表）
       if (detail.template === 'device' || detail.tableMajorType === 'device') {
         try {
-          entry.tags = await client.getTableTags(tableId);
+          const rawTags = await client.getTableTags(tableId);
+          // 提取 tag 元数据，帮助 kesi-frontend 决定展示方式
+          entry.tags = rawTags.map((tag: any) => ({
+            id: tag.id,
+            name: tag.name,
+            unit: tag.unit || '',
+            rw: tag.rw || 'r',
+            policy: tag.policy || 'save',
+          }));
         } catch {
           entry.tags = [];
+        }
+
+        // 获取指令列表
+        try {
+          const rawCommands = await client.getTableCommands(tableId);
+          if (rawCommands.length > 0) {
+            entry.commands = rawCommands.map((cmd: any) => ({
+              id: cmd.id,
+              name: cmd.name,
+              description: cmd.description || '',
+              fields: cmd.fields || [],
+            }));
+          }
+        } catch {
+          // 指令查询失败不影响整体扫描
         }
       }
 
