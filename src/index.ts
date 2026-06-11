@@ -232,8 +232,11 @@ program.command('file-delete <id>').description('删除文件').action(file.file
 
 // ==================== 设备控制 ====================
 
-addOutput(program.command('control-send').description('发送控制命令')
-  .requiredOption('--device <id>', '设备ID').requiredOption('--tag <name>', '属性点').requiredOption('--value <value>', '值').option('--timeout <seconds>', '超时'))
+addOutput(program.command('control-send').description('发送设备指令')
+  .requiredOption('--table <tableId>', '表ID')
+  .requiredOption('--device <id>', '设备ID')
+  .requiredOption('--command <name>', '指令名称')
+  .option('--params <json>', '指令参数（表单写入时必填）'))
   .action(control.controlSend);
 addOutput(program.command('control-batch').description('批量控制').option('--file <path>', '从文件读取').option('--json <json>', 'JSON 数据')).action(control.controlBatch);
 

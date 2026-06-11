@@ -71,6 +71,15 @@ export async function describe(tableId: string, options: any): Promise<void> {
       }
     }
 
+    // 指令（仅设备表）
+    if (detail.template === 'device' || detail.tableMajorType === 'device') {
+      try {
+        result.commands = await client.getTableCommands(tableId);
+      } catch {
+        result.commands = [];
+      }
+    }
+
     // 记录总数
     try {
       const records = await client.getTableRecords(tableId, { limit: 1, withCount: true });

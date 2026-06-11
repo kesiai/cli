@@ -348,15 +348,17 @@ export class KesiApiClient {
 
   // ==================== 设备控制 ====================
 
-  async sendControlCommand(command: any): Promise<any> {
-    const res = await this.http.post('/api/control/send', command);
+  /** 发送设备指令 */
+  async sendDeviceCommand(tableId: string, deviceId: string, command: any, params?: any): Promise<any> {
+    const res = await this.http.post('/driver/driver/command', {
+      ...command,
+      table: tableId,
+      tableData: deviceId,
+      params: params || {},
+    });
     return res.data;
   }
 
-  async sendBatchControlCommands(commands: any[]): Promise<any[]> {
-    const res = await this.http.post('/api/control/batch', { commands });
-    return res.data || [];
-  }
 
   // ==================== 报表 ====================
 
