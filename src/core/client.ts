@@ -197,11 +197,9 @@ export class KesiApiClient {
     return res.data || [];
   }
 
-  /** 批量获取多个表的指令列表 */
+  /** 批量获取多个表的指令列表（POST body 为表ID数组） */
   async getTableCommandsBatch(tableIds: string[]): Promise<Record<string, any[]>> {
-    const res = await this.http.get('/core/t/schema/commands', {
-      params: { query: JSON.stringify(tableIds) },
-    });
+    const res = await this.http.post('/core/t/schema/commands', tableIds);
     return res.data || {};
   }
 
