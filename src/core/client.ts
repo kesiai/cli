@@ -296,8 +296,17 @@ export class KesiApiClient {
   async getWarnings(params?: Record<string, any>): Promise<{ list: any[]; total: number }> {
     const queryParams: Record<string, any> = {};
     if (params?.withCount) queryParams.withCount = true;
+
+    // ⚠️ warning/warning 不支持 projectAll，必须用 project 指定字段（MongoDB 投影格式）
+    const project = {
+      id: 1, time: 1, type: 1, level: 1, status: 1, processed: 1, handle: 1,
+      table: 1, tableData: 1, tableDataId: 1, desc: 1, remark: 1, fields: 1,
+      confirmUser: 1, confirmTime: 1, handleUser: 1, handleTime: 1,
+    };
+
+    const query = { ...params, project };
     const res = await this.http.get('/warning/warning', {
-      params: { query: JSON.stringify(params || {}), ...queryParams },
+      params: { query: JSON.stringify(query), ...queryParams },
     });
     const total = (params?.withCount && res.headers['count'])
       ? parseInt(res.headers['count'], 10) : (res.data?.length || 0);
@@ -305,6 +314,7 @@ export class KesiApiClient {
   }
 
   async getWarningById(id: string): Promise<any> {
+    // GET 单条详情，后端默认返回完整数据，无需 project
     const res = await this.http.get(`/warning/warning/${id}`);
     return res.data || null;
   }
@@ -319,8 +329,16 @@ export class KesiApiClient {
   }
 
   async getLatestWarnings(limit = 10): Promise<any[]> {
-    const res = await this.http.get('/warning/warning/latest', { params: { limit } });
-    return res.data || [];
+    // ⚠️ latest 端点非所有版本支持，失败或返回非数组时降级为 list 排序
+    try {
+      const res = await this.http.get('/warning/warning/latest', { params: { limit } });
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        return res.data;
+      }
+    } catch { /* fallback */ }
+    // 降级：用 list + 时间倒序
+    const result = await this.getWarnings({ limit, sort: { time: -1 } });
+    return result.list;
   }
 
   async batchConfirmWarnings(data: any): Promise<void> {

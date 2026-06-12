@@ -211,11 +211,12 @@ addOutput(warnings.command('list').alias('ls').description('查询报警列表')
   .option('-f, --filter <json>', '过滤条件')
   .option('-l, --limit <number>', '数量限制')
   .option('--with-count', '返回总数')
-  .option('--level <number>', '级别')
-  .option('--status <number>', '状态')
-  .option('--rule-id <id>', '规则ID')
-  .option('--device-id <id>', '设备ID')
-  .option('--keyword <text>', '关键词'))
+  .option('--level <text>', '级别：低/中/高')
+  .option('--status <text>', '确认状态：未确认/已确认')
+  .option('--processed <text>', '处理状态：未处理/已处理')
+  .option('--table-id <id>', '按数据表ID过滤')
+  .option('--device-id <id>', '按设备ID过滤')
+  .option('--keyword <text>', '关键词搜索（匹配报警描述）'))
   .action(warning.warningsList);
 addOutput(warnings.command('get <id>').description('报警详情')).action(warning.warningGet);
 warnings.command('confirm <id>').description('确认报警').option('-n, --note <text>', '备注').option('--user-id <id>', '用户ID').action(warning.warningConfirm);

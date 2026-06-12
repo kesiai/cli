@@ -63,13 +63,13 @@ export async function warningsList(options: any): Promise<void> {
   await executeCommand(async () => {
     const client = getApiClient();
     const params = normalizeQueryOptions(options);
-    // 快捷过滤
-    if (options.level) params.filter = { ...params.filter, level: Number(options.level) };
-    if (options.status) params.filter = { ...params.filter, status: Number(options.status) };
-    if (options.ruleId) params.filter = { ...params.filter, ruleId: options.ruleId };
-    if (options.deviceId) params.filter = { ...params.filter, deviceId: options.deviceId };
-    if (options.tagId) params.filter = { ...params.filter, tagId: options.tagId };
-    if (options.keyword) params.filter = { ...params.filter, title: { $regex: options.keyword } };
+    // 快捷过滤（使用正确的 API 字段名）
+    if (options.level) params.filter = { ...params.filter, level: options.level };
+    if (options.status) params.filter = { ...params.filter, status: options.status };
+    if (options.processed) params.filter = { ...params.filter, processed: options.processed };
+    if (options.tableId) params.filter = { ...params.filter, 'table.id': { $eq: options.tableId } };
+    if (options.deviceId) params.filter = { ...params.filter, tableDataId: { $eq: options.deviceId } };
+    if (options.keyword) params.filter = { ...params.filter, desc: { $regex: options.keyword } };
     const result = await client.getWarnings(params);
     const format = resolveOutputFormat(options.output);
     console.log(formatOutput(result, format));

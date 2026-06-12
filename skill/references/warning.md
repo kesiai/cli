@@ -97,11 +97,15 @@ kesi rules delete <id>
 
 设备数据触发规则后产生的报警记录。
 
+### ⚠️ 查询限制
+
+**`warning/warning` 不支持 `projectAll`**，查询时必须用 `project` 指定返回字段（MongoDB 投影格式）。CLI 已内置处理，无需手动指定。
+
 ### 命令
 
 ```bash
 # 列出报警
-kesi warnings list [--level 3] [--status 0] [--rule-id <id>] [--device-id <id>] [--keyword <text>] [-l limit]
+kesi warnings list [--level 低/中/高] [--status 未确认/已确认] [--processed 未处理/已处理] [--table-id <id>] [--device-id <id>] [--keyword <text>] [-l limit]
 
 # 获取报警详情
 kesi warnings get <id>
@@ -118,9 +122,30 @@ kesi warnings batch-confirm <id1> <id2> -n "批量确认"
 # 报警统计
 kesi warnings stats
 
-# 最新报警
+# 最新报警（如后端不支持 /latest 端点，自动降级为 list + 时间倒序）
 kesi warnings latest [-l 10]
 ```
+
+### 报警事件字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 报警 ID |
+| `time` | string | 报警时间（ISO 8601） |
+| `type` | string[] | 报警规则类型 ID 列表 |
+| `level` | string | 级别：`"低"` / `"中"` / `"高"` |
+| `status` | string | 确认状态：`"未确认"` / `"已确认"` |
+| `processed` | string | 处理状态：`"未处理"` / `"已处理"` |
+| `handle` | boolean | 是否需要处理 |
+| `tableID` | string | ⚠️ 数据表 ID（注意：不是 `table` 对象） |
+| `tableDataID` | string | ⚠️ 设备 ID（注意：不是 `tableData` 对象，且大写 D） |
+| `desc` | string | 报警描述 |
+| `remark` | string | 处理备注 |
+| `fields` | WarningField[] | 触发报警的点位列表（完整 tag 对象） |
+| `confirmUser` | {id, name} | 确认人 |
+| `confirmTime` | string | 确认时间 |
+| `handleUser` | {id, name} | 处理人 |
+| `handleTime` | string | 处理时间 |
 
 ### 报警级别
 

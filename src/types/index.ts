@@ -335,20 +335,59 @@ export interface WarningConfig {
 
 // ==================== 报警事件（warning/warning API）====================
 
-export type WarningLevel = 1 | 2 | 3 | 4;
-export type WarningStatus = 0 | 1 | 2 | 3;
+/** 报警级别 */
+export type WarningLevel = '低' | '中' | '高';
+
+/** 报警确认状态 */
+export type WarningConfirmStatus = '未确认' | '已确认';
+
+/** 报警处理状态 */
+export type WarningProcessStatus = '未处理' | '已处理';
+
+/** 报警触发点位信息 */
+export interface WarningField {
+  id: string;
+  name: string;
+  value: any;
+  policy?: string;
+  Timeout?: number;
+  showSetting?: { fixed?: number; unit?: string; policy?: string };
+  rules?: Record<string, any>;
+  [key: string]: any;
+}
 
 export interface Warning {
-  id?: string;
-  ruleId?: string;
-  ruleName?: string;
+  id: string;
+  /** 报警时间 */
+  time: string;
+  /** 报警规则类型 ID 列表 */
+  type?: string[];
+  /** 级别：低/中/高 */
   level: WarningLevel;
-  status: WarningStatus;
-  title?: string;
-  content?: string;
-  deviceId?: string;
-  deviceName?: string;
-  occurTime: number;
+  /** 确认状态：未确认/已确认 */
+  status: WarningConfirmStatus;
+  /** 处理状态：未处理/已处理 */
+  processed: WarningProcessStatus;
+  /** 是否需要处理 */
+  handle: boolean;
+  /** 数据表 ID */
+  tableID?: string;
+  /** 设备 ID */
+  tableDataID?: string;
+  /** 报警描述 */
+  desc?: string;
+  /** 处理备注 */
+  remark?: string;
+  /** 触发报警的点位列表 */
+  fields?: WarningField[];
+  /** 确认人 */
+  confirmUser?: { id: string; name: string };
+  /** 确认时间 */
+  confirmTime?: string;
+  /** 处理人 */
+  handleUser?: { id: string; name: string };
+  /** 处理时间 */
+  handleTime?: string;
   [key: string]: any;
 }
 
