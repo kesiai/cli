@@ -1,6 +1,6 @@
 # 查询语法参考
 
-> AIRIOT 平台所有查询接口使用统一的 JSON 查询格式。本参考适用于 CLI 命令和前端 HTTP 客户端。
+> KESI 平台所有查询接口使用统一的 JSON 查询格式。本参考适用于 CLI 命令和前端 HTTP 客户端。
 
 ## 核心格式
 
@@ -270,7 +270,7 @@ kesi query driver/driverInstance --limit 50
 前端项目使用 `createResourceClient` 时，查询参数对应关系：
 
 ```typescript
-import { createHttpClient, createResourceClient } from '@airiot/client'
+import { createHttpClient, createResourceClient } from '@kesi/client'
 
 const client = createHttpClient({ resource: 'core/t/energy_meter/d' })
 const meterApi = createResourceClient<EnergyMeter>({ client, resource: 'core/t/energy_meter/d' })
