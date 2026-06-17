@@ -37,9 +37,6 @@ keywords: KESI, IoT, 物联网, 表管理, 设备管理, 报警管理, CLI, sche
 # 全局安装
 npm install -g @kesi/cli
 
-# 初始化项目配置（首次使用）
-kesi init --url http://your-server:3030/rest --project your-project -u admin -p password
-
 # 默认输出 JSON（AI 友好）
 kesi tables -o json
 ```
@@ -54,19 +51,28 @@ kesi tables -o json
 
 ### Phase 0: 认证
 
-每次开始前检查认证状态：
+**登录信息由用户当场提供。**
+
+向用户依次询问以下 4 项（用户口述）：
+
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `url` | 平台 REST 地址 | `http://server:3030/rest` |
+| `project` | 项目名 | `projectName` |
+| `username` | 登录用户名（`-u`） | `admin` |
+| `password` | 登录密码（`-p`） | `password` |
+
+拿到 4 项后，用**用户提供的确切值**执行登录：
 
 ```bash
-kesi config  # 检查是否已登录
+kesi login --url <用户提供的url> --project <用户提供的project> -u <username> -p <password>
 ```
 
-如果未登录或配置为空，引导用户登录：
+⚠️ 注意：
+- ❌ 不要用示例里的占位值（`http://server:3030/rest`、`projectName` 等）直接登录
+- ❌ 不得跳过这一步
 
-```bash
-kesi login --url http://server:3030/rest --project projectName -u username -p password
-```
-
-**只有认证成功后才能继续。**
+**只有登录成功（CLI 返回成功）后才能继续 Phase 1。**
 
 ---
 
@@ -295,7 +301,6 @@ kesi scan --with-sample       # 验证创建结果
 kesi login    # 登录（支持 --url/--project/-u/-p/-t token）
 kesi logout   # 清除配置
 kesi config   # 显示当前配置
-kesi init     # 在当前目录生成 .kesirc.json
 ```
 
 ### AI 聚合命令（推荐先用这些）
