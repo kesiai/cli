@@ -51,28 +51,19 @@ kesi tables -o json
 
 ### Phase 0: 认证
 
-**登录信息由用户当场提供。**
+**连接凭据经 params/env 提供,无登录步骤。** CLI 按优先级解析:**`--base-url`/`--project-id`/`--token` 参数 > `KESI_BASE_URL`/`KESI_PROJECT`/`KESI_TOKEN` 环境变量**(纯 token,不用账号密码)。凭据 flag 全局可用,任何命令都能带。
 
-向用户依次询问以下 4 项（用户口述）：
-
-| 参数 | 说明 | 示例 |
-|------|------|------|
-| `url` | 平台 REST 地址 | `http://server:3030/rest` |
-| `project` | 项目名 | `projectName` |
-| `username` | 登录用户名（`-u`） | `admin` |
-| `password` | 登录密码（`-p`） | `password` |
-
-拿到 4 项后，用**用户提供的确切值**执行登录：
+服务器端 agent 场景:后端起进程时注入该用户的 `KESI_TOKEN`,权限由中台按 token 执行。
 
 ```bash
-kesi login --url <用户提供的url> --project <用户提供的project> -u <username> -p <password>
+# 环境变量方式(进程级,推荐)
+KESI_BASE_URL=http://<平台>/rest KESI_PROJECT=<projectId> KESI_TOKEN=<token> kesi tables
+
+# 参数方式(每命令带,优先级最高)
+kesi tables --base-url http://<平台>/rest --project-id <projectId> --token <token>
 ```
 
-⚠️ 注意：
-- ❌ 不要用示例里的占位值（`http://server:3030/rest`、`projectName` 等）直接登录
-- ❌ 不得跳过这一步
-
-**只有登录成功（CLI 返回成功）后才能继续 Phase 1。**
+⚠️ 缺 baseUrl/projectId/token → `CONFIG_ERROR`。验证:`kesi config`。
 
 ---
 
@@ -298,9 +289,8 @@ kesi scan --with-sample       # 验证创建结果
 ### 通用命令
 
 ```bash
-kesi login    # 登录（支持 --url/--project/-u/-p/-t token）
-kesi logout   # 清除配置
-kesi config   # 显示当前配置
+kesi config   # 查看解析后的配置
+# 凭据经 params/env 提供:--base-url/--project-id/--token 或 KESI_BASE_URL/KESI_PROJECT/KESI_TOKEN
 ```
 
 ### AI 聚合命令（推荐先用这些）

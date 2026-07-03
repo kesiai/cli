@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+// 配置层:CLI 参数 > 环境变量(纯 token,不读文件、不存密码)
+// 与 kesi-assistant 的 runner.mjs 同款逻辑。入口(index.ts)用 extractCredentials
+// 从 argv 抽出凭据 flag 后调 setCliCredentials 注入,优先于环境变量。
 
 export interface KesiConfig {
   baseUrl: string;
@@ -13,48 +13,40 @@ export interface KesiConfig {
   output?: 'json' | 'table' | 'plain';
 }
 
-const GLOBAL_CONFIG_DIR = join(homedir(), '.kesi');
-const GLOBAL_CONFIG_FILE = join(GLOBAL_CONFIG_DIR, 'config.json');
-const PROJECT_CONFIG_FILE = '.kesirc.json';
-
-function readJsonFile(filePath: string): KesiConfig | null {
-  try {
-    if (!existsSync(filePath)) return null;
-    const content = readFileSync(filePath, 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
-}
-
 export type OutputFormat = 'json' | 'table' | 'plain';
 
+// CLI 入口注入的凭据(优先于环境变量)
+let cliCreds: Partial<KesiConfig> = {};
+
+/** 入口调用:注入 commander/argv 解析出的全局凭据 flag */
+export function setCliCredentials(c: { baseUrl?: string; projectId?: string; token?: string; username?: string } = {}): void {
+  cliCreds = {};
+  if (c.baseUrl) cliCreds.baseUrl = c.baseUrl;
+  if (c.projectId) cliCreds.projectId = c.projectId;
+  if (c.token) cliCreds.token = c.token;
+  if (c.username) cliCreds.username = c.username;
+}
+
+/**
+ * 取生效配置:CLI 参数 > 环境变量。缺 baseUrl/projectId/token 返回 null。
+ */
 export function readConfig(): KesiConfig | null {
-  // 项目级配置优先
-  const projectConfig = readJsonFile(resolve(process.cwd(), PROJECT_CONFIG_FILE));
-  const globalConfig = readJsonFile(GLOBAL_CONFIG_FILE);
-  const merged = { ...globalConfig, ...projectConfig } as KesiConfig | null;
+  const pick = (cliKey: keyof KesiConfig, envKey: string): string | undefined =>
+    (cliCreds[cliKey] as string | undefined) || process.env[envKey];
 
-  if (!merged?.baseUrl || !merged?.projectId) return null;
-  return merged;
+  const baseUrl = pick('baseUrl', 'KESI_BASE_URL');
+  const projectId = pick('projectId', 'KESI_PROJECT');
+  const token = pick('token', 'KESI_TOKEN');
+  const username = pick('username', 'KESI_USERNAME');
+
+  if (!baseUrl || !projectId || !token) return null;
+
+  const cfg: KesiConfig = { baseUrl, projectId, token };
+  if (username) cfg.username = username;
+  return cfg;
 }
 
-export function writeConfig(config: Partial<KesiConfig>): void {
-  if (!existsSync(GLOBAL_CONFIG_DIR)) {
-    mkdirSync(GLOBAL_CONFIG_DIR, { recursive: true });
-  }
-  const existing = readJsonFile(GLOBAL_CONFIG_FILE) || {};
-  writeFileSync(GLOBAL_CONFIG_FILE, JSON.stringify({ ...existing, ...config }, null, 2), 'utf-8');
-}
-
-export function clearConfig(): void {
-  if (existsSync(GLOBAL_CONFIG_FILE)) {
-    writeFileSync(GLOBAL_CONFIG_FILE, '{}', 'utf-8');
-  }
-}
-
-export function resolveOutputFormat(format?: string): 'json' | 'table' | 'plain' {
+export function resolveOutputFormat(format?: string): OutputFormat {
   if (format === 'json' || format === 'table' || format === 'plain') return format;
-  const config = readConfig();
-  return config?.output || 'json';
+  return 'json';
 }

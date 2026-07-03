@@ -7,11 +7,9 @@ export { resolveOutputFormat, readConfig, type KesiConfig };
 export function getApiClient(): KesiApiClient {
   const config = readConfig();
   if (!config) {
-    throw new ConfigError('未配置，请先运行: kesi login');
+    throw new ConfigError('未配置:通过 --base-url/--project-id/--token 或环境变量 KESI_BASE_URL/KESI_PROJECT/KESI_TOKEN 提供');
   }
-  const client = new KesiApiClient(config);
-  // 没有 token 但有密码时，首次请求会自动登录
-  return client;
+  return new KesiApiClient(config);
 }
 
 export async function executeCommand(fn: () => Promise<void>): Promise<void> {

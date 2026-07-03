@@ -16,7 +16,7 @@ import * as user from './commands/user.js';
 import * as driver from './commands/driver.js';
 import * as driverSchema from './commands/driver-schema.js';
 import * as query from './commands/query.js';
-import * as initCmd from './commands/init.js';
+import { setCliCredentials } from './core/config.js';
 import * as ai from './commands/ai/scan.js';
 import * as aiDescribe from './commands/ai/describe.js';
 import * as aiSample from './commands/ai/sample.js';
@@ -35,31 +35,10 @@ function addOutput(cmd: Command) {
 }
 
 // ==================== 认证 ====================
+// 凭据经 params/env 提供(--base-url/--project-id/--token 或 KESI_BASE_URL/KESI_PROJECT/KESI_TOKEN),
+// 由入口 extractCredentials 从 argv 抽出后注入 setCliCredentials。无 login/logout/init。
 
-program
-  .command('login')
-  .description('登录 KESI 平台')
-  .requiredOption('--url <url>', '平台地址')
-  .requiredOption('--project <id>', '项目ID')
-  .option('-u, --username <user>', '用户名')
-  .option('-p, --password <pass>', '密码')
-  .option('-t, --token <token>', '直接使用 token')
-  .action(auth.login);
-
-program.command('logout').description('清除配置').action(auth.logout);
-program.command('config').description('查看配置').action(auth.showConfig);
-
-// ==================== 初始化 ====================
-
-program
-  .command('init')
-  .description('在当前目录创建 .kesirc.json 配置文件')
-  .option('--url <url>', '平台地址')
-  .option('--project <id>', '项目ID')
-  .option('-u, --username <user>', '用户名')
-  .option('-p, --password <pass>', '密码')
-  .option('--force', '覆盖已有配置')
-  .action(initCmd.init);
+program.command('config').description('查看解析后的配置').action(auth.showConfig);
 
 // ==================== 表管理 ====================
 
@@ -311,8 +290,37 @@ program
 
 // ==================== 解析 ====================
 
-program.parse(process.argv);
+// 凭据 flag 是全局的,子命令不认 program 级 option;这里从 argv 抽出注入,再从 argv 移除,
+// 让 commander 正常解析剩余参数(凭据 flag 可出现在命令任意位置)。
+function extractCredentials(argv: string[]): string[] {
+  const rest: string[] = [];
+  const c: { baseUrl?: string; projectId?: string; token?: string; username?: string } = {};
+  let noMoreOpts = false;
+  const isCred = (k: string) => k === 'base-url' || k === 'project-id' || k === 'token' || k === 'username';
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--') { noMoreOpts = true; rest.push(a); continue; }
+    if (!noMoreOpts && a.startsWith('--')) {
+      const eq = a.indexOf('=');
+      const key = eq > -1 ? a.slice(2, eq) : a.slice(2);
+      if (isCred(key)) {
+        const v = eq > -1 ? a.slice(eq + 1) : argv[++i];
+        if (key === 'base-url') c.baseUrl = v;
+        else if (key === 'project-id') c.projectId = v;
+        else if (key === 'token') c.token = v;
+        else c.username = v;
+        continue;
+      }
+    }
+    rest.push(a);
+  }
+  setCliCredentials(c);
+  return rest;
+}
 
-if (!process.argv.slice(2).length) {
+const userArgs = extractCredentials(process.argv.slice(2));
+program.parse(userArgs, { from: 'user' });
+
+if (!userArgs.length) {
   program.outputHelp();
 }
