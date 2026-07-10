@@ -7,19 +7,19 @@
 ### 列出报表
 
 ```bash
-kesi reports [-f filter] [-l limit]
+$K reports [-f filter] [-l limit]
 ```
 
 ### 获取报表详情
 
 ```bash
-kesi report <id>
+$K report <id>
 ```
 
 ### 创建报表
 
 ```bash
-kesi report-create -n "月度统计" -t "chart" -d "设备运行月度统计" -c '{"tableId":"iot_devices","type":"bar"}'
+$K report-create -n "月度统计" -t "chart" -d "设备运行月度统计" -c '{"tableId":"iot_devices","type":"bar"}'
 ```
 
 | 参数 | 说明 |
@@ -32,20 +32,20 @@ kesi report-create -n "月度统计" -t "chart" -d "设备运行月度统计" -c
 ### 更新报表
 
 ```bash
-kesi report-update <id> -n "新名称" -c '{"type":"line"}'
+$K report-update <id> -n "新名称" -c '{"type":"line"}'
 ```
 
 ### 删除报表
 
 ```bash
-kesi report-delete <id>
+$K report-delete <id>
 ```
 
 ### 执行报表
 
 ```bash
-kesi report-execute <id> --json '{"month":"2024-06"}'
-kesi report-execute <id> --file params.json
+$K report-execute <id> --json '{"month":"2024-06"}'
+$K report-execute <id> --file params.json
 ```
 
 ## 关联

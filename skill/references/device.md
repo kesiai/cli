@@ -31,37 +31,37 @@
 ### 数据点
 
 ```bash
-kesi tags <tableId>                  # 查看表的数据点定义
-kesi record-tags <table> <recordId>  # 查看记录的数据点值
+$K tags <tableId>                  # 查看表的数据点定义
+$K record-tags <table> <recordId>  # 查看记录的数据点值
 ```
 
 ### 时序数据
 
 ```bash
-kesi data-latest --device <id> --tag <tagId>         # 最新数据
-kesi data-history --device <id> --tag <tagId> \
+$K data-latest --device <id> --tag <tagId>         # 最新数据
+$K data-history --device <id> --tag <tagId> \
   --start <ms> --end <ms>                             # 历史数据
 ```
 
 ### 设备控制
 
 ```bash
-kesi control-send --device <id> --tag <tag> --value <val>  # 单个控制
-kesi control-batch --file commands.json                     # 批量控制
+$K control-send --device <id> --tag <tag> --value <val>  # 单个控制
+$K control-batch --file commands.json                     # 批量控制
 ```
 
 ### 在线统计
 
 ```bash
-kesi stats-online <tableId1> <tableId2> ...
+$K stats-online <tableId1> <tableId2> ...
 ```
 
 ### 驱动管理
 
 ```bash
-kesi drivers                       # 列出驱动实例
-kesi driver <id>                   # 驱动详情
-kesi driver-schema <driverType>    # 驱动 schema（点位必填字段、settings 配置）
+$K drivers                       # 列出驱动实例
+$K driver <id>                   # 驱动详情
+$K driver-schema <driverType>    # 驱动 schema（点位必填字段、settings 配置）
 ```
 
 ## ⚠️ 设备表创建要点
@@ -69,10 +69,10 @@ kesi driver-schema <driverType>    # 驱动 schema（点位必填字段、settin
 ### 创建流程
 
 ```
-1. kesi drivers                        → 选择驱动
-2. kesi driver <id>                    → 获取 settings 配置
-3. kesi driver-schema <driverType>     → 获取点位字段定义
-4. 组装 JSON → kesi table-create       → 创建设备表
+1. $K drivers                        → 选择驱动
+2. $K driver <id>                    → 获取 settings 配置
+3. $K driver-schema <driverType>     → 获取点位字段定义
+4. 组装 JSON → $K table-create       → 创建设备表
 ```
 
 ### 必须正确的三项
@@ -97,7 +97,7 @@ kesi driver-schema <driverType>    # 驱动 schema（点位必填字段、settin
 
 formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一行只有 warnFlag，占 1 格）。
 
-### ⚠️ 驱动信息必须来自用户指定或 `kesi drivers` 查询
+### ⚠️ 驱动信息必须来自用户指定或 `$K drivers` 查询
 
 - 用户指定驱动时，必须使用用户给出的驱动配置（driver/driverType/driverName/driverExampleId/groupId/driverGroupId），不能自行猜测或使用其他驱动
 - 测试驱动特征：`driver: "test"`, `driverType: "测试驱动"`, `driverExampleId: "test_test"`, `groupId: "test"`, `driverGroupId: "test_test"`
@@ -105,7 +105,7 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
 
 ### 驱动字段映射
 
-⚠️ **驱动关联字段必须来自 `kesi drivers` 和 `kesi driver <id>` 的返回值**
+⚠️ **驱动关联字段必须来自 `$K drivers` 和 `$K driver <id>` 的返回值**
 
 | device 字段 | 来源 | 示例值 |
 |-------------|------|--------|
@@ -119,7 +119,7 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
 
 ### 点位字段
 
-⚠️ **点位的驱动参数必须来自 `kesi driver-schema <driverType>` 的返回值**
+⚠️ **点位的驱动参数必须来自 `$K driver-schema <driverType>` 的返回值**
 
 不同驱动的点位字段完全不同（Modbus 有 area/offset/dataType，OPC UA 有 nodeId，MQTT 有 topic）。
 
@@ -161,7 +161,7 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
     "driverName": "<name>",
     "driverExampleId": "<id>",
     "groupId": "<id>",
-    "driverGroupId": "<from kesi driver>",
+    "driverGroupId": "<from $K driver>",
     "emulator": false,
     "settings": { "ip": "127.0.0.1", "port": 502 },
     "tags": [

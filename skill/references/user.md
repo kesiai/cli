@@ -7,7 +7,7 @@
 ### 当前用户
 
 ```bash
-kesi user
+$K user
 ```
 
 返回当前登录用户的信息（ID、用户名、角色、权限等）。
@@ -15,7 +15,7 @@ kesi user
 ### 用户列表
 
 ```bash
-kesi users [-f filter] [-l limit]
+$K users [-f filter] [-l limit]
 ```
 
 ## 用户数据结构

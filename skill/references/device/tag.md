@@ -6,14 +6,14 @@
 
 ```bash
 # 查看表的所有数据点
-kesi tags <tableId>
+$K tags <tableId>
 
 # 查看记录的数据点值
-kesi record-tags <table> <recordId>
+$K record-tags <table> <recordId>
 
 # 查询驱动 schema（获取点位必填字段和枚举值）
-kesi driver-schema <driverType>
-# 例: kesi driver-schema modbus
+$K driver-schema <driverType>
+# 例: $K driver-schema modbus
 ```
 
 ## ⚠️ 创建流程
@@ -22,10 +22,10 @@ kesi driver-schema <driverType>
 
 ```bash
 # 1. 查询可用驱动
-kesi drivers
+$K drivers
 
 # 2. 获取驱动的点位字段定义（必填字段、枚举值等）
-kesi driver-schema modbus
+$K driver-schema modbus
 ```
 
 从 `driver-schema` 返回的 `model.tags.required` 和 `model.tags.fields` 可以得知：
@@ -36,7 +36,7 @@ kesi driver-schema modbus
 
 ## 点位完整字段
 
-点位字段分两层：**基础字段**（所有驱动通用）+ **驱动字段**（来自 `kesi driver-schema`）。
+点位字段分两层：**基础字段**（所有驱动通用）+ **驱动字段**（来自 `$K driver-schema`）。
 
 ### 基础字段
 
@@ -55,7 +55,7 @@ kesi driver-schema modbus
 
 ### 驱动字段（以 Modbus 为例）
 
-通过 `kesi driver-schema modbus` 获取。Modbus 的必填驱动字段：
+通过 `$K driver-schema modbus` 获取。Modbus 的必填驱动字段：
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|

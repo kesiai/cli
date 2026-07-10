@@ -38,6 +38,6 @@
 ## 说明
 
 - `type` 为 `"object"`，值为单个文件对象（单附件，前端上传组件 `multiple=false`）
-- 文件经 `kesi file-upload` 上传，取返回对象填入字段（前端表单走 `/core/mediaLibrary/upload`，`onChange` 直接以该结构落库）
+- 文件经 `$K file-upload` 上传，取返回对象填入字段（前端表单走 `/core/mediaLibrary/upload`，`onChange` 直接以该结构落库）
 - 多附件场景使用 `upload-group`（`type` 为 `array`，见 [upload-group.md](upload-group.md)）
 - 列表/详情由附件展示组件读取 `name` + `url` 渲染（单个对象会被兜底包成数组渲染）

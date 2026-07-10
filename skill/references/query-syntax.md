@@ -29,7 +29,7 @@ GET /core/t/{tableId}/d?query={"limit":20,"sort":{"name":1},"filter":{"status":{
 
 ```bash
 # CLI
-kesi records energy_meter --skip 20 --limit 10 --with-count
+$K records energy_meter --skip 20 --limit 10 --with-count
 ```
 
 ```json
@@ -48,7 +48,7 @@ kesi records energy_meter --skip 20 --limit 10 --with-count
 
 ```bash
 # CLI：按创建时间降序
-kesi records energy_meter -s '{"createTime":-1}'
+$K records energy_meter -s '{"createTime":-1}'
 ```
 
 ```json
@@ -138,7 +138,7 @@ kesi records energy_meter -s '{"createTime":-1}'
 
 ```bash
 # CLI：查询前 10 条记录
-kesi records energy_meter --limit 10
+$K records energy_meter --limit 10
 
 # 对应的查询 JSON
 { "limit": 10, "withCount": true }
@@ -148,13 +148,13 @@ kesi records energy_meter --limit 10
 
 ```bash
 # CLI：按名称模糊查询
-kesi records energy_meter -f '{"name":{"$regex":"空调"}}'
+$K records energy_meter -f '{"name":{"$regex":"空调"}}'
 
 # CLI：按状态精确查询
-kesi records energy_meter -f '{"status":{"$eq":"online"}}'
+$K records energy_meter -f '{"status":{"$eq":"online"}}'
 
 # CLI：多条件（逗号分隔的多个 -f 会合并）
-kesi records energy_meter -f '{"online":true,"building":{"$eq":"A栋"}}'
+$K records energy_meter -f '{"online":true,"building":{"$eq":"A栋"}}'
 ```
 
 ```json
@@ -170,7 +170,7 @@ kesi records energy_meter -f '{"online":true,"building":{"$eq":"A栋"}}'
 
 ```bash
 # CLI：按时间倒序，每页 20 条，第 2 页
-kesi records energy_meter -s '{"createTime":-1}' -l 20 --skip 20
+$K records energy_meter -s '{"createTime":-1}' -l 20 --skip 20
 ```
 
 ```json
@@ -186,7 +186,7 @@ kesi records energy_meter -s '{"createTime":-1}' -l 20 --skip 20
 
 ```bash
 # CLI：在线 + 未禁用 + 按类型筛选
-kesi records energy_meter -f '{"online":true,"disable":{"$ne":true},"type":{"$in":["sensor","gateway"]}}' -s '{"name":1}' -l 50
+$K records energy_meter -f '{"online":true,"disable":{"$ne":true},"type":{"$in":["sensor","gateway"]}}' -s '{"name":1}' -l 50
 ```
 
 ```json
@@ -206,14 +206,14 @@ kesi records energy_meter -f '{"online":true,"disable":{"$ne":true},"type":{"$in
 
 ```bash
 # CLI：按创建时间范围
-kesi records energy_meter -f '{"createTime":{"$gte":"2024-01-01","$lte":"2024-12-31"}}'
+$K records energy_meter -f '{"createTime":{"$gte":"2024-01-01","$lte":"2024-12-31"}}'
 ```
 
 ### 3.6 计数
 
 ```bash
 # CLI：统计在线设备数
-kesi records energy_meter -f '{"online":true}' --limit 1 --with-count
+$K records energy_meter -f '{"online":true}' --limit 1 --with-count
 ```
 
 也可以用专用的 count 端点：
@@ -230,19 +230,19 @@ GET /core/t/{tableId}/d/count?query={"where":{"online":true}}
 
 ```bash
 # 查询用户
-kesi query core/user --limit 50
+$K query core/user --limit 50
 
 # 按用户名过滤用户
-kesi query core/user -f '{"name":{"$regex":"admin"}}'
+$K query core/user -f '{"name":{"$regex":"admin"}}'
 
 # 查询角色
-kesi query core/role --limit 50
+$K query core/role --limit 50
 
 # 查询操作日志（按时间倒序）
-kesi query core/log -s '{"time":-1}' -l 50
+$K query core/log -s '{"time":-1}' -l 50
 
 # 查询驱动实例
-kesi query driver/driverInstance --limit 50
+$K query driver/driverInstance --limit 50
 ```
 
 **常用系统资源端点：**
@@ -275,27 +275,27 @@ import { createHttpClient, createResourceClient } from '@kesi/client'
 const client = createHttpClient({ resource: 'core/t/energy_meter/d' })
 const meterApi = createResourceClient<EnergyMeter>({ client, resource: 'core/t/energy_meter/d' })
 
-// CLI:  kesi records energy_meter --limit 10 -s '{"createTime":-1}'
+// CLI:  $K records energy_meter --limit 10 -s '{"createTime":-1}'
 // 前端:
 const { items } = await meterApi.query(
   { limit: 10, order: { createTime: 'DESC' } }
 )
 
-// CLI:  kesi records energy_meter -f '{"name":{"$regex":"空调"}}'
+// CLI:  $K records energy_meter -f '{"name":{"$regex":"空调"}}'
 // 前端:
 const { items } = await meterApi.query(
   {},
   { name: { $regex: '空调' } }
 )
 
-// CLI:  kesi records energy_meter -f '{"online":true}' --limit 50
+// CLI:  $K records energy_meter -f '{"online":true}' --limit 50
 // 前端:
 const { items, total } = await meterApi.query(
   { limit: 50 },
   { online: { $eq: true } }
 )
 
-// CLI:  kesi records energy_meter --limit 1 --with-count -f '{"online":true}'
+// CLI:  $K records energy_meter --limit 1 --with-count -f '{"online":true}'
 // 前端:
 const count = await meterApi.count({ online: { $eq: true } })
 ```

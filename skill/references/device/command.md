@@ -6,11 +6,11 @@
 
 ```bash
 # 发送单个控制指令
-kesi control-send --device <deviceId> --tag <tagName> --value <value>
+$K control-send --device <deviceId> --tag <tagName> --value <value>
 
 # 批量控制
-kesi control-batch --file commands.json
-kesi control-batch --json '[{"device":"id1","tag":"tag1","value":1}]'
+$K control-batch --file commands.json
+$K control-batch --json '[{"device":"id1","tag":"tag1","value":1}]'
 ```
 
 ## 指令数据结构（DeviceCommand）

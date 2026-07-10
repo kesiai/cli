@@ -88,9 +88,9 @@
           "driver": "<驱动名>",
           "driverType": "<驱动类型>",
           "driverName": "<驱动名称>",
-          "driverExampleId": "<from kesi drivers>",
-          "groupId": "<from kesi driver>",
-          "driverGroupId": "<from kesi driver>",
+          "driverExampleId": "<from $K drivers>",
+          "groupId": "<from $K driver>",
+          "driverGroupId": "<from $K driver>",
           "emulator": false,
           "settings": { "<连接参数>": "<值>" },
           "tags": [
@@ -114,5 +114,5 @@
 - [ ] 设备表包含 7 个固定预设字段
 - [ ] `formLayout.colSpan` 之和 = `cols`
 - [ ] `rich-text`/`editable-table`/`map` 的 `colSpan = cols`
-- [ ] `device.driverExampleId` 来自 `kesi drivers` 输出
-- [ ] `device.tags` 字段符合 `kesi driver-schema <type>` 的必填要求
+- [ ] `device.driverExampleId` 来自 `$K drivers` 输出
+- [ ] `device.tags` 字段符合 `$K driver-schema <type>` 的必填要求

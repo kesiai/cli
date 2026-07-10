@@ -10,19 +10,19 @@ KESI 报警系统分为两部分：**报警规则**（定义什么条件触发�
 
 ```bash
 # 列出所有规则
-kesi rules list [-f filter] [-l limit] [--with-count]
+$K rules list [-f filter] [-l limit] [--with-count]
 
 # 获取规则详情
-kesi rules get <id>
+$K rules get <id>
 
 # 创建规则
-kesi rules create -n "温度超限" -l 3 -e true -d "温度超过80度触发"
+$K rules create -n "温度超限" -l 3 -e true -d "温度超过80度触发"
 
 # 更新规则
-kesi rules update <id> -n "新名称" -l 2 --enable false
+$K rules update <id> -n "新名称" -l 2 --enable false
 
 # 删除规则
-kesi rules delete <id>
+$K rules delete <id>
 ```
 
 ### 参数说明
@@ -38,7 +38,7 @@ kesi rules delete <id>
 
 有两种报警规则：
 
-1. **独立报警规则**（`/warning/rule` API）：通过 `kesi rules create` 管理
+1. **独立报警规则**（`/warning/rule` API）：通过 `$K rules create` 管理
 2. **表级报警规则**（嵌入表 schema 的 `warning` 字段）：在创建设备表时定义
 
 ### 表级报警规则结构
@@ -105,25 +105,25 @@ kesi rules delete <id>
 
 ```bash
 # 列出报警
-kesi warnings list [--level 低/中/高] [--status 未确认/已确认] [--processed 未处理/已处理] [--table-id <id>] [--device-id <id>] [--keyword <text>] [-l limit]
+$K warnings list [--level 低/中/高] [--status 未确认/已确认] [--processed 未处理/已处理] [--table-id <id>] [--device-id <id>] [--keyword <text>] [-l limit]
 
 # 获取报警详情
-kesi warnings get <id>
+$K warnings get <id>
 
 # 确认报警（已知晓）
-kesi warnings confirm <id> -n "已确认" --user-id <userId>
+$K warnings confirm <id> -n "已确认" --user-id <userId>
 
 # 解决报警
-kesi warnings resolve <id> -n "已修复"
+$K warnings resolve <id> -n "已修复"
 
 # 批量确认
-kesi warnings batch-confirm <id1> <id2> -n "批量确认"
+$K warnings batch-confirm <id1> <id2> -n "批量确认"
 
 # 报警统计
-kesi warnings stats
+$K warnings stats
 
 # 最新报警（如后端不支持 /latest 端点，自动降级为 list + 时间倒序）
-kesi warnings latest [-l 10]
+$K warnings latest [-l 10]
 ```
 
 ### 报警事件字段
@@ -153,7 +153,7 @@ kesi warnings latest [-l 10]
 
 | 场景 | 编码方式 | 示例 |
 |------|----------|------|
-| **CLI `kesi rules create`**（独立规则） | 数字 1-4 | `-l 3` |
+| **CLI `$K rules create`**（独立规则） | 数字 1-4 | `-l 3` |
 | **表级规则**（嵌入表 schema `warning.rules`） | 中文字符串 | `"低"` / `"中"` / `"高"` |
 | **前端报警事件**（`warning/warning` 查询结果） | 中文字符串 | `"低"` / `"中"` / `"高"` |
 

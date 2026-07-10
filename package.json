@@ -14,6 +14,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node18 --outfile=skill/cli/index.cjs",
     "dev": "tsc --watch",
     "test": "vitest",
     "test:run": "vitest run",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.21.5",
     "typescript": "^5.9.3",
     "vitest": "^2.0.0"
   }

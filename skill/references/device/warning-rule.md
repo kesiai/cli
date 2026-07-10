@@ -8,18 +8,18 @@
 
 ```bash
 # 报警规则管理
-kesi rules list                    # 查询规则列表
-kesi rules get <id>                # 规则详情
-kesi rules create -n <name> -l <level>  # 创建规则
-kesi rules update <id>             # 更新规则
-kesi rules delete <id>             # 删除规则
+$K rules list                    # 查询规则列表
+$K rules get <id>                # 规则详情
+$K rules create -n <name> -l <level>  # 创建规则
+$K rules update <id>             # 更新规则
+$K rules delete <id>             # 删除规则
 
 # 报警事件管理
-kesi warnings list                 # 报警列表
-kesi warnings get <id>             # 报警详情
-kesi warnings confirm <id>         # 确认报警
-kesi warnings resolve <id>         # 标记恢复
-kesi warnings stats                # 报警统计
+$K warnings list                 # 报警列表
+$K warnings get <id>             # 报警详情
+$K warnings confirm <id>         # 确认报警
+$K warnings resolve <id>         # 标记恢复
+$K warnings stats                # 报警统计
 ```
 
 ## 规则数据结构（WarningRule）

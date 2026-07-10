@@ -107,4 +107,4 @@
 1. **`relate.fields` 写成字符串数组** `["name","status"]` —— ❌ 错。必须是 `[{title,key,fieldSchema}]` 对象数组。
 2. **漏掉 `id` / `config` / `items` / `order` / `isSystem`** —— 会导致前端识别异常（如多选退化成单选、列表只剩该列）。
 3. **自行添加 `selectType` / `recordSelectType` / `relateTo` / `relateShowFields`** —— ❌ 不要加。这些是前端运行时/内部字段，不属于持久化的字段 schema，乱加反而会让关联选择器渲染异常。正确结构只有上面"字段定义"里列出的那些 key。
-4. **改字段结构时丢失其他字段** —— 用 `kesi table <id>` 取到的 schema 再整体 `table-update` 时，务必确认 `properties` / `tableSchema` / `formSchema` 里**所有原有字段都在**，只改目标字段；后端会按新 schema 裁剪记录数据，schema 缩减会**永久丢失**对应字段的数据。
+4. **改字段结构时丢失其他字段** —— 用 `$K table <id>` 取到的 schema 再整体 `table-update` 时，务必确认 `properties` / `tableSchema` / `formSchema` 里**所有原有字段都在**，只改目标字段；后端会按新 schema 裁剪记录数据，schema 缩减会**永久丢失**对应字段的数据。

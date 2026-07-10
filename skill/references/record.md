@@ -7,7 +7,7 @@
 ### 查询记录列表
 
 ```bash
-kesi records <table> [-f filter] [-s sort] [-l limit] [--skip skip] [--with-count]
+$K records <table> [-f filter] [-s sort] [-l limit] [--skip skip] [--with-count]
 ```
 
 参数说明：
@@ -20,43 +20,43 @@ kesi records <table> [-f filter] [-s sort] [-l limit] [--skip skip] [--with-coun
 ### 获取单条记录
 
 ```bash
-kesi record <table> <id>
+$K record <table> <id>
 ```
 
 ### 创建记录
 
 ```bash
 # 通过 JSON 文件
-kesi record-create <table> --file data.json
+$K record-create <table> --file data.json
 
 # 通过命令行 JSON
-kesi record-create <table> --json '{"name":"设备A","status":"running"}'
+$K record-create <table> --json '{"name":"设备A","status":"running"}'
 
 # 通过 --data 简写（key=value 格式）
-kesi record-create <table> --data name=设备A --data status=running
+$K record-create <table> --data name=设备A --data status=running
 
 # upsert 模式（存在则更新）
-kesi record-create <table> --json '{"name":"设备A"}' --upsert
+$K record-create <table> --json '{"name":"设备A"}' --upsert
 ```
 
 ### 更新记录
 
 ```bash
-kesi record-update <table> <id> --json '{"status":"stopped"}'
-kesi record-update <table> <id> --data status=stopped
+$K record-update <table> <id> --json '{"status":"stopped"}'
+$K record-update <table> <id> --data status=stopped
 ```
 
 ### 删除记录
 
 ```bash
-kesi record-delete <table> <id>
-kesi record-delete <table> <id> --attachment  # 同时删除关联附件
+$K record-delete <table> <id>
+$K record-delete <table> <id> --attachment  # 同时删除关联附件
 ```
 
 ### 批量删除
 
 ```bash
-kesi records-batch-delete <table> <id1> <id2> <id3>
+$K records-batch-delete <table> <id1> <id2> <id3>
 ```
 
 ## 记录值格式

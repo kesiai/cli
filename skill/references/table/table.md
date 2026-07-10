@@ -7,36 +7,36 @@
 ### 列出所有表
 
 ```bash
-kesi tables [-f filter] [-s sort] [-l limit] [--skip skip]
+$K tables [-f filter] [-s sort] [-l limit] [--skip skip]
 ```
 
 ### 获取表详情
 
 ```bash
-kesi table <id>
+$K table <id>
 ```
 
 ### 创建表
 
 ```bash
 # 通过 JSON 文件
-kesi table-create --file schema.json
+$K table-create --file schema.json
 
 # 通过命令行 JSON
-kesi table-create --json '{"id":"myTable","title":"测试","template":"common","schema":{...}}'
+$K table-create --json '{"id":"myTable","title":"测试","template":"common","schema":{...}}'
 ```
 
 ### 更新表
 
 ```bash
-kesi table-update <id> --file schema.json
-kesi table-update <id> --json '{"title":"新标题"}'
+$K table-update <id> --file schema.json
+$K table-update <id> --json '{"title":"新标题"}'
 ```
 
 ### 删除表
 
 ```bash
-kesi table-delete <id>
+$K table-delete <id>
 ```
 
 ⚠️ 删除表会同时删除所有记录数据，不可恢复。
@@ -75,7 +75,7 @@ kesi table-delete <id>
 ## 批量创建（seed）
 
 ```bash
-kesi seed --file seed.json
+$K seed --file seed.json
 ```
 
 seed.json 格式：
@@ -101,7 +101,7 @@ seed.json 格式：
 **Step 1: 创建空映射表**
 
 ```bash
-kesi table-create --json '{
+$K table-create --json '{
   "id": "my_mapping",
   "title": "ERP物料映射",
   "template": "tableMapping",
@@ -121,7 +121,7 @@ kesi table-create --json '{
 
 ```bash
 # 查看已有的表，确定要映射的源表
-kesi tables
+$K tables
 
 # 调用映射同步接口获取源表字段配置
 # （需要后端配置了外部数据库连接）
@@ -136,7 +136,7 @@ kesi tables
 
 ```bash
 # 将同步获取的字段写入映射表
-kesi table-update my_mapping --json '{"schema":{"type":"object","name":"my_mapping","title":"ERP物料映射","properties":{ ... 同步的字段 ... }}}'
+$K table-update my_mapping --json '{"schema":{"type":"object","name":"my_mapping","title":"ERP物料映射","properties":{ ... 同步的字段 ... }}}'
 ```
 
 ### 集合表（settable）
@@ -146,7 +146,7 @@ kesi table-update my_mapping --json '{"schema":{"type":"object","name":"my_mappi
 **Step 1: 查看已有表**
 
 ```bash
-kesi tables
+$K tables
 ```
 
 **Step 2: 创建集合表并指定聚合的表**
@@ -154,7 +154,7 @@ kesi tables
 集合表有 3 个内置字段（id、table、tabledata），并通过 `settable` 配置指定要聚合的表：
 
 ```bash
-kesi table-create --json '{
+$K table-create --json '{
   "id": "my_collection",
   "title": "数据聚合表",
   "template": "settable",
@@ -201,7 +201,7 @@ kesi table-create --json '{
 }
 ```
 
-⚠️ `settable.table` 中的 `id` 和 `title` 必须与实际表一致，可通过 `kesi tables` 查询获取。
+⚠️ `settable.table` 中的 `id` 和 `title` 必须与实际表一致，可通过 `$K tables` 查询获取。
 
 ### 设备表（device）
 

@@ -7,7 +7,7 @@
 ### 上传文件
 
 ```bash
-kesi file-upload <filePath> [--name filename] [--mime mimeType]
+$K file-upload <filePath> [--name filename] [--mime mimeType]
 ```
 
 返回文件对象（含 `url`、`name` 等字段）。
@@ -17,13 +17,13 @@ kesi file-upload <filePath> [--name filename] [--mime mimeType]
 ### 查询文件信息
 
 ```bash
-kesi file-info <id>
+$K file-info <id>
 ```
 
 ### 删除文件
 
 ```bash
-kesi file-delete <id>
+$K file-delete <id>
 ```
 
 ## 与控件的关系
@@ -34,8 +34,8 @@ kesi file-delete <id>
 ## 使用流程
 
 ```
-1. kesi file-upload ./photo.jpg   → {"name":"photo.jpg","url":"/core/mediaLibrary/.../photo.jpg"}
-2. kesi record-create myTable --json '{"photos":[{"name":"photo.jpg","url":"..."}]}'
+1. $K file-upload ./photo.jpg   → {"name":"photo.jpg","url":"/core/mediaLibrary/.../photo.jpg"}
+2. $K record-create myTable --json '{"photos":[{"name":"photo.jpg","url":"..."}]}'
 ```
 
 ## 关联

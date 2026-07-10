@@ -11,7 +11,7 @@ keywords: KESI, IoT, 物联网, 表管理, 设备管理, 报警管理, 增删改
 
 **所有数据结构、表配置、字段定义必须基于本 skill 的 references 目录和 CLI 命令输出，禁止参考其他项目代码。**
 
-- ✅ 允许：本 skill 的 `references/` 文档、`kesi scan` / `kesi describe` 等命令输出、用户的口述需求
+- ✅ 允许：本 skill 的 `references/` 文档、`$K scan` / `$K describe` 等命令输出、用户的口述需求
 - ❌ 禁止：读取其他项目的代码来决定表结构或字段配置
 
 ### 表类型正确性
@@ -61,12 +61,13 @@ keywords: KESI, IoT, 物联网, 表管理, 设备管理, 报警管理, 增删改
 ## 快速开始
 
 ```bash
-# 全局安装
-npm install -g @kesi/cli
+# 本 skill 自带 CLI（已打包到 cli/index.cjs），无需全局安装
+K=node cli/index.cjs     # 在 skill 根目录执行；部署到项目时 node .claude/skills/kesi-cli/cli/index.cjs
 
-# 默认输出 JSON（AI 友好）
-kesi tables -o json
+$K tables -o json        # 默认输出 JSON（AI 友好）
 ```
+
+> 改了 CLI 源码后，运行 `npm run build:bundle` 重新生成 `skill/cli/index.cjs`。
 
 ---
 
@@ -81,10 +82,10 @@ kesi tables -o json
 ### Phase 1: 查看现状
 
 ```bash
-kesi tables                      # 列出所有表
-kesi scan --with-sample          # 全库概览（表结构 + 样本数据）
-kesi describe <tableId>          # 某张表的字段级 schema
-kesi sample <tableId>            # 预览某张表的数据
+$K tables                      # 列出所有表
+$K scan --with-sample          # 全库概览（表结构 + 样本数据）
+$K describe <tableId>          # 某张表的字段级 schema
+$K sample <tableId>            # 预览某张表的数据
 ```
 
 ### Phase 2: 按需操作数据
@@ -92,29 +93,29 @@ kesi sample <tableId>            # 预览某张表的数据
 **记录增删改查：**
 
 ```bash
-kesi records <table> [-f filter] [-l limit] [--with-count]   # 查询列表
-kesi record  <table> <id>                                     # 查单条
-kesi record-create <table> --data k=v ...                     # 新增（支持 --json / --file / --upsert）
-kesi record-update <table> <id> --data k=v                    # 修改
-kesi record-delete <table> <id>                               # 删除
-kesi records-batch-delete <table> <id1> <id2>                 # 批量删除
+$K records <table> [-f filter] [-l limit] [--with-count]   # 查询列表
+$K record  <table> <id>                                     # 查单条
+$K record-create <table> --data k=v ...                     # 新增（支持 --json / --file / --upsert）
+$K record-update <table> <id> --data k=v                    # 修改
+$K record-delete <table> <id>                               # 删除
+$K records-batch-delete <table> <id1> <id2>                 # 批量删除
 ```
 
 **表结构管理（自定义表）：**
 
 ```bash
-kesi table-create --file schema.json      # 建表（⚠️ 必须遵循上面的 template+function 映射）
-kesi table-update <id> --file schema.json # 改表
-kesi table-delete <id>                    # 删表（⚠️ 连带删除全部记录，不可恢复）
+$K table-create --file schema.json      # 建表（⚠️ 必须遵循上面的 template+function 映射）
+$K table-update <id> --file schema.json # 改表
+$K table-delete <id>                    # 删表（⚠️ 连带删除全部记录，不可恢复）
 ```
 
-**批量建表 + 灌种子数据（可选）：** 用 `kesi seed --file seed.json`，seed.json 结构参考下文「Phase 3: 表创建与验证 → 3.1 生成 seed.json」。
+**批量建表 + 灌种子数据（可选）：** 用 `$K seed --file seed.json`，seed.json 结构参考下文「Phase 3: 表创建与验证 → 3.1 生成 seed.json」。
 
 **通用资源查询（内置表 / 系统资源）：**
 
 ```bash
-kesi query <resource> [-f filter] [-l limit]    # 如 core/user、core/department、warning/warning
-kesi query-get <resource> <id>
+$K query <resource> [-f filter] [-l limit]    # 如 core/user、core/department、warning/warning
+$K query-get <resource> <id>
 ```
 
 > 记录命令详细参数见 [references/record.md](references/record.md)，表命令见 [references/table/table.md](references/table/table.md)，内置资源路径见下文「命令速查 → 通用资源查询」，查询/过滤语法见 [references/query-syntax.md](references/query-syntax.md)。
@@ -144,13 +145,13 @@ kesi query-get <resource> <id>
 
 ```bash
 # 环境变量方式(进程级,推荐)
-KESI_BASE_URL=http://<平台>/rest KESI_PROJECT=<projectId> KESI_TOKEN=<token> kesi tables
+KESI_BASE_URL=http://<平台>/rest KESI_PROJECT=<projectId> KESI_TOKEN=<token> $K tables
 
 # 参数方式(每命令带,优先级最高)
-kesi tables --base-url http://<平台>/rest --project-id <projectId> --token <token>
+$K tables --base-url http://<平台>/rest --project-id <projectId> --token <token>
 ```
 
-⚠️ 缺 baseUrl/projectId/token → `CONFIG_ERROR`。验证:`kesi config`。
+⚠️ 缺 baseUrl/projectId/token → `CONFIG_ERROR`。验证:`$K config`。
 
 ---
 
@@ -159,7 +160,7 @@ kesi tables --base-url http://<平台>/rest --project-id <projectId> --token <to
 扫描平台现有数据，了解当前状态：
 
 ```bash
-kesi scan --with-sample
+$K scan --with-sample
 ```
 
 **向用户报告当前状态：**
@@ -196,9 +197,9 @@ kesi scan --with-sample
 创建设备表**前**必须查询可用驱动：
 
 ```bash
-kesi drivers                        # 获取驱动实例列表
-kesi driver <id>                    # 获取驱动详情和连接参数（settings）
-kesi driver-schema <driverType>     # 获取点位的必填字段和枚举值
+$K drivers                        # 获取驱动实例列表
+$K driver <id>                    # 获取驱动详情和连接参数（settings）
+$K driver-schema <driverType>     # 获取点位的必填字段和枚举值
 ```
 
 设备表有 **7 个固定预设字段**（必须全部包含）：
@@ -313,9 +314,9 @@ kesi driver-schema <driverType>     # 获取点位的必填字段和枚举值
           "driver": "<驱动名>",
           "driverType": "<驱动类型>",
           "driverName": "<驱动名称>",
-          "driverExampleId": "<from kesi drivers>",
-          "groupId": "<from kesi driver>",
-          "driverGroupId": "<from kesi driver>",
+          "driverExampleId": "<from $K drivers>",
+          "groupId": "<from $K driver>",
+          "driverGroupId": "<from $K driver>",
           "emulator": false,
           "settings": { "<连接参数>": "<值>" },
           "tags": [
@@ -336,13 +337,13 @@ kesi driver-schema <driverType>     # 获取点位的必填字段和枚举值
 #### 3.2 执行创建
 
 ```bash
-kesi seed --file seed.json    # 建表 + 灌种子数据
+$K seed --file seed.json    # 建表 + 灌种子数据
 ```
 
 #### 3.3 验证
 
 ```bash
-kesi scan --with-sample       # 验证创建结果
+$K scan --with-sample       # 验证创建结果
 ```
 
 **验证要点：**
@@ -361,7 +362,7 @@ kesi scan --with-sample       # 验证创建结果
 数据层创建并验证完成后，将控制权交给 kesi-frontend skill 进行前端生成。
 
 **交接数据：**
-- `kesi scan --with-sample` 的完整输出（表结构、字段、数据点、样本数据）
+- `$K scan --with-sample` 的完整输出（表结构、字段、数据点、样本数据）
 - 用户确认的项目类型偏好（大屏可视化 vs 中台管理）
 
 **交接指令：**
@@ -378,7 +379,7 @@ kesi scan --with-sample       # 验证创建结果
 ### 通用命令
 
 ```bash
-kesi config   # 查看解析后的配置
+$K config   # 查看解析后的配置
 # 凭据经 params/env 提供:--base-url/--project-id/--token 或 KESI_BASE_URL/KESI_PROJECT/KESI_TOKEN
 ```
 
@@ -386,10 +387,10 @@ kesi config   # 查看解析后的配置
 
 | 命令 | 用途 |
 |------|------|
-| `kesi scan [--with-sample] [-o file]` | 全库 schema 导出，AI 一次了解全局 |
-| `kesi describe <tableId> [--with-tags]` | 字段级 schema，AI 据此生成表单/表格 |
-| `kesi sample <tableId> [-l 5]` | 预览数据，AI 理解数据长什么样 |
-| `kesi seed --file seed.json` | 批量建表+灌种子数据 |
+| `$K scan [--with-sample] [-o file]` | 全库 schema 导出，AI 一次了解全局 |
+| `$K describe <tableId> [--with-tags]` | 字段级 schema，AI 据此生成表单/表格 |
+| `$K sample <tableId> [-l 5]` | 预览数据，AI 理解数据长什么样 |
+| `$K seed --file seed.json` | 批量建表+灌种子数据 |
 
 ### 命令总览
 
@@ -402,15 +403,15 @@ kesi config   # 查看解析后的配置
 ### 驱动与点位
 
 ```bash
-kesi drivers                        # 列出驱动实例
-kesi driver <id>                    # 驱动详情（含 device.settings 连接参数）
-kesi driver-schema <driverType>     # 驱动 schema（点位字段定义、枚举值、settings 配置）
+$K drivers                        # 列出驱动实例
+$K driver <id>                    # 驱动详情（含 device.settings 连接参数）
+$K driver-schema <driverType>     # 驱动 schema（点位字段定义、枚举值、settings 配置）
 ```
 
 ⚠️ 创建设备表时必须：
-1. `kesi drivers` → 获取驱动 ID 和 driverType
-2. `kesi driver <id>` → 获取连接参数（settings）
-3. `kesi driver-schema <driverType>` → 获取点位的必填字段和枚举值（不同驱动的点位字段完全不同）
+1. `$K drivers` → 获取驱动 ID 和 driverType
+2. `$K driver <id>` → 获取连接参数（settings）
+3. `$K driver-schema <driverType>` → 获取点位的必填字段和枚举值（不同驱动的点位字段完全不同）
 4. 然后组装 JSON 创建设备表
 
 详见 [references/device.md](references/device.md) 和 [references/device/tag.md](references/device/tag.md)。
@@ -432,8 +433,8 @@ kesi driver-schema <driverType>     # 驱动 schema（点位字段定义、枚�
 平台内置 63 个 schema，每个都有 `resource` 字段（API 路径）。
 
 ```bash
-kesi query <resource> [-f filter] [-s sort] [-l limit] [--with-count]
-kesi query-get <resource> <id>
+$K query <resource> [-f filter] [-s sort] [-l limit] [--with-count]
+$K query-get <resource> <id>
 ```
 
 常用资源：
