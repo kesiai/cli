@@ -1,6 +1,6 @@
 # upload-group
 
-图片上传（多图）。
+文件上传（附件组 / 多图）。
 
 ## 字段定义
 
@@ -15,11 +15,19 @@
 
 ## 记录值示例
 
+存储结构与 `upload` 完全一致——**文件对象数组**：
+
 ```json
-{ "photos": ["img-id-001", "img-id-002"] }
+{
+  "photos": [
+    { "name": "a.jpg", "url": "/core/mediaLibrary/xxx/a.jpg" },
+    { "name": "b.jpg", "url": "/core/mediaLibrary/xxx/b.jpg" }
+  ]
+}
 ```
 
 ## 说明
 
-- 与 `upload` 结构一致，区别是前端渲染为图片预览+上传组件
-- 值为文件 ID 数组，通常用于图片类型文件
+- 与 `upload` 存储结构一致，区别是前端渲染为图片卡片预览 + 上传组件
+- 文件对象字段同 [upload.md](upload.md)，核心为 `name` + `url`
+- 通常用于图片，可附 `thumbUrl` 生成缩略图

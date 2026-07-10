@@ -1,6 +1,6 @@
 # 文件管理
 
-文件/媒体上传和管理。上传后获得文件 ID，其他控件（如 upload、upload-group）通过 ID 引用文件。
+文件/媒体上传和管理。上传后获得文件对象，附件控件（upload、upload-group）以**文件对象数组**形式存储记录值。
 
 ## 命令
 
@@ -10,7 +10,9 @@
 kesi file-upload <filePath> [--name filename] [--mime mimeType]
 ```
 
-返回文件 ID。
+返回文件对象（含 `url`、`name` 等字段）。
+
+> 上传走 `/mediaLibrary` 端点，返回结构与前端表单上传一致。
 
 ### 查询文件信息
 
@@ -26,14 +28,14 @@ kesi file-delete <id>
 
 ## 与控件的关系
 
-- `upload` 控件：记录值为文件 ID 数组，如 `["file-id-001"]`
-- `upload-group` 控件：同上，前端渲染为图片预览模式
+- `upload` 控件：记录值为单个文件对象，如 `{"name":"report.pdf","url":"..."}`
+- `upload-group` 控件：记录值为文件对象数组，如 `[{"name":"a.jpg","url":"..."}]`，前端渲染为图片预览模式
 
 ## 使用流程
 
 ```
-1. kesi file-upload ./photo.jpg        → 获得 "file-id-001"
-2. kesi record-create myTable --json '{"photos":["file-id-001"]}'
+1. kesi file-upload ./photo.jpg   → {"name":"photo.jpg","url":"/core/mediaLibrary/.../photo.jpg"}
+2. kesi record-create myTable --json '{"photos":[{"name":"photo.jpg","url":"..."}]}'
 ```
 
 ## 关联
