@@ -348,9 +348,18 @@ export class KesiApiClient {
   // ==================== 文件 ====================
 
   async uploadFile(file: Buffer, filename: string, mimeType?: string): Promise<any> {
-    const res = await this.http.post('/api/files/upload', file, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      params: { filename, mimeType },
+    // 上传到媒体库：POST /core/mediaLibrary/upload?action=cover
+    // 手动构造 multipart/form-data body（axios 1.7 不会为 native FormData 自动加 boundary）
+    const mime = mimeType || 'application/octet-stream';
+    const boundary = `----KesiBoundary${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+    const header = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mime}\r\n\r\n`,
+    );
+    const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const body = Buffer.concat([header, file, footer]);
+    const res = await this.http.post('/core/mediaLibrary/upload', body, {
+      params: { action: 'cover' },
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
     });
     return res.data;
   }
