@@ -33,6 +33,32 @@ $K table-update <id> --file schema.json
 $K table-update <id> --json '{"title":"新标题"}'
 ```
 
+⚠️ **`table-update` 是完全替换操作，不是合并**
+
+**规则：**
+- 传入的字段会**完全覆盖**对应的整个配置块
+- 未传入的字段**保持原值不变**
+
+**常见的错误示例：**
+
+| 错误操作 | 后果 |
+|---------|------|
+| 只传 `{"device": {"tags": [...]}}` | `device` 下的 `driver`、`settings` 等被清空 |
+| 只传 `{"schema": {"properties": {...}}}` | `schema` 下的 `formSchema`、`tableSchema` 等被清空 |
+| 只传 `{"warning": {"rules": [...]}}` | `warning` 下的其他配置丢失 |
+
+**正确做法：**
+
+```bash
+# 1. 先获取完整配置
+$K table <id> > full-config.json
+
+# 2. 编辑 full-config.json，修改目标字段
+
+# 3. 用完整配置更新
+$K table-update <id> --file full-config.json
+```
+
 ### 删除表
 
 ```bash

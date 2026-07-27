@@ -14,6 +14,25 @@ keywords: KESI, IoT, 物联网, 表管理, 设备管理, 报警管理, 增删改
 - ✅ 允许：本 skill 的 `references/` 文档、`$K scan` / `$K describe` 等命令输出、用户的口述需求
 - ❌ 禁止：读取其他项目的代码来决定表结构或字段配置
 
+### 临时文件规则
+
+**⚠️ 禁止在 skill 目录下创建临时文件。**
+
+所有临时 JSON/数据文件必须使用系统临时目录：
+- Bash: `TMPFILE=$(mktemp)` 或 `/tmp/kesi-$RANDOM.json`
+- 用完后删除：`rm -f $TMPFILE`
+
+### Schema 读取强制规则
+
+**⚠️ 任何涉及字段/属性/配置的修改操作，必须先读取 references/ 中对应文档获取真实 schema，禁止凭经验或推断猜测字段名。**
+
+适用范围：表字段、数据点、指令、事件、计算节点、报警规则、驱动配置等。
+
+**强制流程：**
+1. 读取 `references/` 中对应文档（如 `references/device/tag.md`）
+2. 从文档中读取真实字段名和结构
+3. 使用真实字段名执行修改，**不得创造或推断字段名**
+
 ### 表类型正确性
 
 **创建表时必须严格遵循 template + function 映射，否则后端会将设备表识别为普通表。**
@@ -96,7 +115,7 @@ $K sample <tableId>            # 预览某张表的数据
 $K records <table> [-f filter] [-l limit] [--with-count]   # 查询列表
 $K record  <table> <id>                                     # 查单条
 $K record-create <table> --data k=v ...                     # 新增（支持 --json / --file / --upsert）
-$K record-update <table> <id> --data k=v                    # 修改
+$K record-update <table> <id> --data k=v                    # (⚠️ 是完全替换操作，不是合并)
 $K record-delete <table> <id>                               # 删除
 $K records-batch-delete <table> <id1> <id2>                 # 批量删除
 ```
@@ -105,7 +124,7 @@ $K records-batch-delete <table> <id1> <id2>                 # 批量删除
 
 ```bash
 $K table-create --file schema.json      # 建表（⚠️ 必须遵循上面的 template+function 映射）
-$K table-update <id> --file schema.json # 改表
+$K table-update <id> --file schema.json # 改表 (⚠️ 是完全替换操作，不是合并)
 $K table-delete <id>                    # 删表（⚠️ 连带删除全部记录，不可恢复）
 ```
 
