@@ -1,6 +1,7 @@
 import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputFormat } from '../core/utils.js';
 import { formatOutput, formatSuccess } from '../core/formatter.js';
 import { readFileSync } from 'node:fs';
+import { validateTableFields, formatValidationResult } from '../core/field-validator.js';
 
 export async function tablesList(options: any): Promise<void> {
   await executeCommand(async () => {
@@ -31,6 +32,20 @@ export async function tableCreate(options: any): Promise<void> {
     } else {
       throw new Error('请提供 --json 或 --file 参数');
     }
+
+    // 验证字段配置
+    const validationResult = validateTableFields(data);
+    const format = (options.output === 'json') ? 'json' : 'text';
+
+    // 显示验证结果
+    console.log(formatValidationResult(validationResult, format as 'text' | 'json'));
+
+    // 如果有错误，终止创建
+    if (!validationResult.valid) {
+      throw new Error('字段验证失败，请修复后重试');
+    }
+
+    // 验证通过，继续创建
     const client = getApiClient();
     const id = await client.saveTable(data);
     console.log(formatSuccess(`创建成功，表ID: ${id}`));
@@ -47,6 +62,20 @@ export async function tableUpdate(id: string, options: any): Promise<void> {
     } else {
       throw new Error('请提供 --json 或 --file 参数');
     }
+
+    // 验证字段配置
+    const validationResult = validateTableFields(data);
+    const format = (options.output === 'json') ? 'json' : 'text';
+
+    // 显示验证结果
+    console.log(formatValidationResult(validationResult, format as 'text' | 'json'));
+
+    // 如果有错误，终止更新
+    if (!validationResult.valid) {
+      throw new Error('字段验证失败，请修复后重试');
+    }
+
+    // 验证通过，继续更新
     const client = getApiClient();
     await client.updateTable(id, data);
     console.log(formatSuccess('更新成功'));
