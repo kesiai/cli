@@ -96,7 +96,7 @@ $K tables -o json        # 默认输出 JSON（AI 友好）
 
 ### Phase 0: 认证
 
-凭据经 params/env 提供（详见下文「数据+前端模式」的 Phase 0: 认证）。中台 agent 场景由后端注入 `KESI_TOKEN`，权限由中台按 token 执行。
+凭据经 params/env 提供（详见下文「数据+前端模式」的 Phase 0: 认证）。服务器端 agent 由后端注入 `KESI_TOKEN` 环境变量。
 
 ### Phase 1: 查看现状
 
@@ -158,15 +158,21 @@ $K query-get <resource> <id>
 
 ### Phase 0: 认证
 
-**连接凭据经 params/env 提供,无登录步骤。** CLI 按优先级解析:**`--base-url`/`--project-id`/`--token` 参数 > `KESI_BASE_URL`/`KESI_PROJECT`/`KESI_TOKEN` 环境变量**(纯 token,不用账号密码)。凭据 flag 全局可用,任何命令都能带。
+**连接凭据经 params/env 提供，无登录步骤。优先级：CLI 参数 > 环境变量。**
 
-服务器端 agent 场景:后端起进程时注入该用户的 `KESI_TOKEN`,权限由中台按 token 执行。
+| 字段 | CLI 参数 | 环境变量 |
+|------|----------|----------|
+| baseUrl | `--base-url` | `KESI_BASE_URL` |
+| projectId | `--project-id` | `KESI_PROJECT` |
+| token | `--token` | `KESI_TOKEN` |
+
+服务器端 agent 场景：后端启动进程时注入该用户的 `KESI_TOKEN` 环境变量。
 
 ```bash
-# 环境变量方式(进程级,推荐)
+# 环境变量方式（进程级）
 KESI_BASE_URL=http://<平台>/rest KESI_PROJECT=<projectId> KESI_TOKEN=<token> $K tables
 
-# 参数方式(每命令带,优先级最高)
+# CLI 参数方式（优先级更高）
 $K tables --base-url http://<平台>/rest --project-id <projectId> --token <token>
 ```
 
@@ -399,7 +405,7 @@ $K scan --with-sample       # 验证创建结果
 
 ```bash
 $K config   # 查看解析后的配置
-# 凭据经 params/env 提供:--base-url/--project-id/--token 或 KESI_BASE_URL/KESI_PROJECT/KESI_TOKEN
+# 凭据优先级：CLI 参数 > 环境变量（--base-url/--project-id/--token 或 KESI_BASE_URL/KESI_PROJECT/KESI_TOKEN）
 ```
 
 ### AI 聚合命令（推荐先用这些）
