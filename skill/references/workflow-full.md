@@ -110,7 +110,7 @@ $K driver-schema <driverType>     # 获取点位的必填字段和枚举值
 ```json
 {
   "driver": "test",
-  "driverType": "测试驱动",
+  "driverType": "test",
   "driverName": "测试驱动",
   "driverExampleId": "test",
   "groupId": "test",
@@ -127,7 +127,7 @@ $K driver-schema <driverType>     # 获取点位的必填字段和枚举值
 
 **测试驱动字段说明：**
 - `driver`: 固定为 `"test"`
-- `driverType`: 固定为 `"测试驱动"`
+- `driverType`: 固定为 `"test"`
 - `driverName`: 固定为 `"测试驱动"`
 - `driverExampleId`: 驱动实例 id，测试驱动固定为 `"test"`
 - `groupId`: 驱动实例 id，测试驱动固定为 `"test"`
