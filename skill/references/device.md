@@ -100,8 +100,9 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
 ### ⚠️ 驱动信息必须来自用户指定或 `$K drivers` 查询
 
 - 用户指定驱动时，必须使用用户给出的驱动配置（driver/driverType/driverName/driverExampleId/groupId/driverGroupId），不能自行猜测或使用其他驱动
-- 测试驱动特征要严格遵守：`driver: "test"`, `driverType: "测试驱动"`, `driverExampleId: "test_test"`, `groupId: "test"`, `driverGroupId: "test_test"`
+- 测试驱动特征要严格遵守：`driver: "test"`, `driverType: "测试驱动"`, `driverExampleId: "test"`, `groupId: "test"`, `driverGroupId: "test_$$_test"`
 - 测试驱动的点位**不需要** area/offset/dataType 等协议字段，只需要 id/name/policy
+- 测试驱动完整配置详见 [workflow-full.md](workflow-full.md#测试驱动配置)
 
 ### 驱动字段映射
 
