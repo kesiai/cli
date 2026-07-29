@@ -132,6 +132,7 @@ $K driver-schema <driverType>     # 获取点位的必填字段和枚举值
 - `driverExampleId`: 驱动实例 id，测试驱动固定为 `"test"`
 - `groupId`: 驱动实例 id，测试驱动固定为 `"test"`
 - `driverGroupId`: 按 `{driverType}_$$_{id}` 格式生成，测试驱动为 `"test_$$_test"`
+- `emulator`: 仿真开关，测试驱动固定为 `false`（不开启仿真）
 - `settings`: 空对象 `{}`
 - `commands`: 空数组 `[]`（如需要可添加指令）
 - `events`: 空数组 `[]`（如需要可添加事件）
