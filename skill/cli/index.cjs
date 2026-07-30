@@ -21282,6 +21282,25 @@ function normalizeQueryOptions(options) {
     withCount: options.withCount ?? false
   };
 }
+function deepMerge(target, source) {
+  const result = { ...target };
+  for (const key in source) {
+    if (source[key] === void 0) {
+      continue;
+    }
+    const sourceValue = source[key];
+    const targetValue = result[key];
+    if (isObject2(sourceValue) && isObject2(targetValue)) {
+      result[key] = deepMerge(targetValue, sourceValue);
+    } else {
+      result[key] = sourceValue;
+    }
+  }
+  return result;
+}
+function isObject2(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
 // src/commands/auth.ts
 async function showConfig(options) {
@@ -21304,6 +21323,228 @@ async function showConfig(options) {
 
 // src/commands/table.ts
 var import_node_fs = require("node:fs");
+
+// src/core/field-validator.ts
+var VALID_CONTROL_TYPES = [
+  "text",
+  "number",
+  "select-string",
+  "select-number",
+  "select-array-string",
+  "select-array-number",
+  "date",
+  "date-range",
+  "time",
+  "rich-text",
+  "boolean",
+  "reference",
+  "editable-table",
+  "upload",
+  "upload-group",
+  "area",
+  "rate",
+  "map",
+  "link",
+  "serial-number",
+  "user-role",
+  "bytes-array",
+  "relate",
+  "relate-multiple"
+];
+var CONTROL_TYPE_CONFIG = {
+  "text": { name: "\u6587\u672C", type: "string", config: "\u6587\u672C" },
+  "number": { name: "\u6570\u5B57", type: "number", config: "\u6570\u5B57" },
+  "select-string": { name: "\u9009\u62E9\u5668(\u6587\u672C)", type: "string", config: "\u9009\u62E9\u5668", requiredProps: ["enum"] },
+  "select-number": { name: "\u9009\u62E9\u5668(\u6570\u5B57)", type: "number", config: "\u9009\u62E9\u5668", requiredProps: ["enum"] },
+  "select-array-string": { name: "\u9009\u62E9\u5668(\u591A\u9009\u6587\u672C)", type: "array", config: "\u9009\u62E9\u5668", requiredProps: ["enum"] },
+  "select-array-number": { name: "\u9009\u62E9\u5668(\u591A\u9009\u6570\u5B57)", type: "array", config: "\u9009\u62E9\u5668", requiredProps: ["enum"] },
+  "date": { name: "\u65E5\u671F", type: "string", config: "\u65E5\u671F" },
+  "date-range": { name: "\u65E5\u671F\u8303\u56F4", type: "string", config: "\u65E5\u671F\u8303\u56F4" },
+  "time": { name: "\u65F6\u95F4", type: "string", config: "\u65F6\u95F4" },
+  "rich-text": { name: "\u5BCC\u6587\u672C", type: "string", config: "\u5BCC\u6587\u672C" },
+  "boolean": { name: "\u5E03\u5C14\u503C", type: "boolean", config: "\u5E03\u5C14\u503C" },
+  "reference": { name: "\u67E5\u627E\u5F15\u7528", type: "string", config: "\u67E5\u627E\u5F15\u7528" },
+  "editable-table": { name: "\u8868\u683C", type: "array", config: "\u8868\u683C", requiredProps: ["items"] },
+  "upload": { name: "\u9644\u4EF6", type: "object", config: "\u9644\u4EF6" },
+  "upload-group": { name: "\u9644\u4EF6\u7EC4", type: "array", config: "\u9644\u4EF6\u7EC4" },
+  "area": { name: "\u533A\u57DF", type: "string", config: "\u533A\u57DF" },
+  "rate": { name: "\u661F\u7EA7\u8BC4\u4EF7", type: "number", config: "\u661F\u7EA7\u8BC4\u4EF7" },
+  "map": { name: "\u5B9A\u4F4D", type: "object", config: "\u5B9A\u4F4D" },
+  "link": { name: "\u94FE\u63A5", type: "string", config: "\u94FE\u63A5" },
+  "serial-number": { name: "\u7F16\u53F7", type: "string", config: "\u7F16\u53F7" },
+  "user-role": { name: "\u7528\u6237", type: "object", config: "\u7528\u6237" },
+  "bytes-array": { name: "\u5B57\u8282\u6570\u7EC4", type: "string", config: "\u5B57\u8282\u6570\u7EC4" },
+  "relate": { name: "\u5173\u8054\u5B57\u6BB5(\u5355\u9009)", type: "object", config: "\u5173\u8054\u5B57\u6BB5", requiredProps: ["relate"] },
+  "relate-multiple": { name: "\u5173\u8054\u5B57\u6BB5(\u591A\u9009)", type: "array", config: "\u5173\u8054\u5B57\u6BB5", requiredProps: ["relate"] }
+};
+function validateField(field, index) {
+  const errors = [];
+  const warnings2 = [];
+  const fieldPath = index !== void 0 ? `\u5B57\u6BB5[${index}]` : "\u5B57\u6BB5";
+  if (!field.key && !field.identifier) {
+    errors.push({
+      field: field.key || field.identifier,
+      type: "error",
+      message: `${fieldPath}: \u7F3A\u5C11\u5B57\u6BB5\u6807\u8BC6 (key \u6216 identifier)`,
+      path: "key"
+    });
+  }
+  if (!field.title && !field.name) {
+    warnings2.push({
+      field: field.key || field.identifier,
+      type: "warning",
+      message: `${fieldPath}: \u7F3A\u5C11\u5B57\u6BB5\u6807\u9898 (title \u6216 name)`,
+      path: "title"
+    });
+  }
+  const controlType = field.controlType;
+  if (!controlType) {
+    errors.push({
+      field: field.key || field.identifier || "(unknown)",
+      type: "error",
+      message: `${fieldPath}: \u7F3A\u5C11 controlType`,
+      path: "controlType"
+    });
+    return { valid: false, errors, warnings: warnings2 };
+  }
+  if (!VALID_CONTROL_TYPES.includes(controlType)) {
+    errors.push({
+      field: field.key || field.identifier,
+      type: "error",
+      message: `${fieldPath}: \u65E0\u6548\u7684 controlType "${controlType}"\uFF0C\u5141\u8BB8\u7684\u503C: ${VALID_CONTROL_TYPES.join(", ")}`,
+      path: "controlType"
+    });
+    return { valid: false, errors, warnings: warnings2 };
+  }
+  const controlTypeStr = String(controlType);
+  if (controlTypeStr === "select" || controlTypeStr === "relate") {
+    errors.push({
+      field: field.key || field.identifier,
+      type: "error",
+      message: `${fieldPath}: controlType "${controlTypeStr}" \u4E0D\u5B8C\u6574\uFF0C\u8BF7\u4F7F\u7528\u5B8C\u6574\u7684\u7C7B\u578B\uFF08\u5982 select-string\u3001relate-multiple \u7B49\uFF09`,
+      path: "controlType"
+    });
+  }
+  const typeConfig = CONTROL_TYPE_CONFIG[controlType];
+  if (field.type && field.type !== typeConfig.type) {
+    errors.push({
+      field: field.key || field.identifier,
+      type: "error",
+      message: `${fieldPath}: type "${field.type}" \u4E0E controlType "${controlType}" \u4E0D\u5339\u914D\uFF0C\u5E94\u4E3A "${typeConfig.type}"`,
+      path: "type"
+    });
+  }
+  if (field.config && field.config !== typeConfig.config) {
+    warnings2.push({
+      field: field.key || field.identifier,
+      type: "warning",
+      message: `${fieldPath}: config "${field.config}" \u4E0E controlType "${controlType}" \u4E0D\u5339\u914D\uFF0C\u5E94\u4E3A "${typeConfig.config}"`,
+      path: "config"
+    });
+  }
+  if (typeConfig.requiredProps) {
+    for (const prop of typeConfig.requiredProps) {
+      const value = field[prop];
+      if (value === void 0 || value === null || Array.isArray(value) && value.length === 0) {
+        errors.push({
+          field: field.key || field.identifier,
+          type: "error",
+          message: `${fieldPath}: controlType "${controlType}" \u7F3A\u5C11\u5FC5\u9700\u5C5E\u6027 "${prop}"`,
+          path: prop
+        });
+      }
+    }
+  }
+  if (controlType.startsWith("select-") && field.enum) {
+    if (!Array.isArray(field.enum)) {
+      errors.push({
+        field: field.key || field.identifier,
+        type: "error",
+        message: `${fieldPath}: enum \u5FC5\u987B\u662F\u6570\u7EC4`,
+        path: "enum"
+      });
+    } else if (field.enum.length === 0) {
+      errors.push({
+        field: field.key || field.identifier,
+        type: "error",
+        message: `${fieldPath}: enum \u4E0D\u80FD\u4E3A\u7A7A\u6570\u7EC4`,
+        path: "enum"
+      });
+    }
+  }
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings: warnings2
+  };
+}
+function validateTableFields(data) {
+  const errors = [];
+  const warnings2 = [];
+  if (!data) {
+    errors.push({
+      type: "error",
+      message: "\u8868\u6570\u636E\u4E3A\u7A7A"
+    });
+    return { valid: false, errors, warnings: warnings2 };
+  }
+  const fields = data.fieldSchema || data.fields || [];
+  if (!Array.isArray(fields)) {
+    errors.push({
+      type: "error",
+      message: "fieldSchema \u4E0D\u662F\u6570\u7EC4",
+      path: "fieldSchema"
+    });
+    return { valid: false, errors, warnings: warnings2 };
+  }
+  if (fields.length === 0) {
+    warnings2.push({
+      type: "warning",
+      message: "\u8868\u6CA1\u6709\u5B9A\u4E49\u4EFB\u4F55\u5B57\u6BB5"
+    });
+  }
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i];
+    const result = validateField(field, i);
+    errors.push(...result.errors);
+    warnings2.push(...result.warnings);
+  }
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings: warnings2
+  };
+}
+function formatValidationResult(result, format = "text") {
+  if (format === "json") {
+    return JSON.stringify(result, null, 2);
+  }
+  const lines = [];
+  if (result.valid && result.warnings.length === 0) {
+    lines.push("\u2705 \u5B57\u6BB5\u9A8C\u8BC1\u901A\u8FC7");
+  } else if (result.valid && result.warnings.length > 0) {
+    lines.push("\u26A0\uFE0F \u5B57\u6BB5\u9A8C\u8BC1\u901A\u8FC7\uFF0C\u4F46\u6709 " + result.warnings.length + " \u4E2A\u8B66\u544A");
+  } else {
+    lines.push("\u274C \u5B57\u6BB5\u9A8C\u8BC1\u5931\u8D25\uFF0C\u53D1\u73B0 " + result.errors.length + " \u4E2A\u9519\u8BEF");
+  }
+  if (result.errors.length > 0) {
+    lines.push("\n\u9519\u8BEF:");
+    for (const error of result.errors) {
+      const fieldInfo = error.field ? `[${error.field}]` : "";
+      lines.push(`  - ${error.message} ${fieldInfo}`);
+    }
+  }
+  if (result.warnings.length > 0) {
+    lines.push("\n\u8B66\u544A:");
+    for (const warning of result.warnings) {
+      const fieldInfo = warning.field ? `[${warning.field}]` : "";
+      lines.push(`  - ${warning.message} ${fieldInfo}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+// src/commands/table.ts
 async function tablesList(options) {
   await executeCommand(async () => {
     const client = getApiClient();
@@ -21331,6 +21572,12 @@ async function tableCreate(options) {
     } else {
       throw new Error("\u8BF7\u63D0\u4F9B --json \u6216 --file \u53C2\u6570");
     }
+    const validationResult = validateTableFields(data);
+    const format = options.output === "json" ? "json" : "text";
+    console.log(formatValidationResult(validationResult, format));
+    if (!validationResult.valid) {
+      throw new Error("\u5B57\u6BB5\u9A8C\u8BC1\u5931\u8D25\uFF0C\u8BF7\u4FEE\u590D\u540E\u91CD\u8BD5");
+    }
     const client = getApiClient();
     const id = await client.saveTable(data);
     console.log(formatSuccess(`\u521B\u5EFA\u6210\u529F\uFF0C\u8868ID: ${id}`));
@@ -21338,16 +21585,24 @@ async function tableCreate(options) {
 }
 async function tableUpdate(id, options) {
   await executeCommand(async () => {
-    let data;
+    let partialData;
     if (options.json) {
-      data = JSON.parse(options.json);
+      partialData = JSON.parse(options.json);
     } else if (options.file) {
-      data = JSON.parse((0, import_node_fs.readFileSync)(options.file, "utf-8"));
+      partialData = JSON.parse((0, import_node_fs.readFileSync)(options.file, "utf-8"));
     } else {
       throw new Error("\u8BF7\u63D0\u4F9B --json \u6216 --file \u53C2\u6570");
     }
     const client = getApiClient();
-    await client.updateTable(id, data);
+    const original = await client.getTableById(id);
+    const merged = deepMerge(original, partialData);
+    const validationResult = validateTableFields(merged);
+    const format = options.output === "json" ? "json" : "text";
+    console.log(formatValidationResult(validationResult, format));
+    if (!validationResult.valid) {
+      throw new Error("\u5B57\u6BB5\u9A8C\u8BC1\u5931\u8D25\uFF0C\u8BF7\u4FEE\u590D\u540E\u91CD\u8BD5");
+    }
+    await client.updateTable(id, merged);
     console.log(formatSuccess("\u66F4\u65B0\u6210\u529F"));
   });
 }
@@ -21397,18 +21652,20 @@ async function recordCreate(tableName, options) {
 }
 async function recordUpdate(tableName, id, options) {
   await executeCommand(async () => {
-    let data;
+    let partialData;
     if (options.file) {
-      data = JSON.parse((0, import_node_fs2.readFileSync)(options.file, "utf-8"));
+      partialData = JSON.parse((0, import_node_fs2.readFileSync)(options.file, "utf-8"));
     } else if (options.json) {
-      data = JSON.parse(options.json);
+      partialData = JSON.parse(options.json);
     } else if (options.data) {
-      data = JSON.parse(options.data);
+      partialData = JSON.parse(options.data);
     } else {
       throw new Error("\u8BF7\u63D0\u4F9B --file, --json \u6216 --data \u53C2\u6570");
     }
     const client = getApiClient();
-    await client.updateTableRecord(tableName, id, data);
+    const original = await client.getTableRecordById(tableName, id);
+    const merged = deepMerge(original, partialData);
+    await client.updateTableRecord(tableName, id, merged);
     console.log(formatSuccess("\u66F4\u65B0\u6210\u529F"));
   });
 }
@@ -21536,12 +21793,14 @@ async function warningRulesCreate(options) {
 async function warningRulesUpdate(id, options) {
   await executeCommand(async () => {
     const client = getApiClient();
-    const data = {};
-    if (options.name !== void 0) data.name = options.name;
-    if (options.level !== void 0) data.level = Number(options.level);
-    if (options.enable !== void 0) data.enable = options.enable !== "false";
-    if (options.description !== void 0) data.description = options.description;
-    await client.updateWarningRule(id, data);
+    const original = await client.getWarningRuleById(id);
+    const partialData = {};
+    if (options.name !== void 0) partialData.name = options.name;
+    if (options.level !== void 0) partialData.level = Number(options.level);
+    if (options.enable !== void 0) partialData.enable = options.enable !== "false";
+    if (options.description !== void 0) partialData.description = options.description;
+    const merged = deepMerge(original, partialData);
+    await client.updateWarningRule(id, merged);
     console.log(formatSuccess("\u66F4\u65B0\u6210\u529F"));
   });
 }
@@ -21793,12 +22052,14 @@ async function reportCreate(options) {
 }
 async function reportUpdate(id, options) {
   await executeCommand(async () => {
-    const data = {};
-    if (options.name) data.name = options.name;
-    if (options.description) data.description = options.description;
-    if (options.config) data.config = JSON.parse(options.config);
     const client = getApiClient();
-    await client.updateReport(id, data);
+    const original = await client.getReportById(id);
+    const partialData = {};
+    if (options.name !== void 0) partialData.name = options.name;
+    if (options.description !== void 0) partialData.description = options.description;
+    if (options.config !== void 0) partialData.config = JSON.parse(options.config);
+    const merged = deepMerge(original, partialData);
+    await client.updateReport(id, merged);
     console.log(formatSuccess("\u66F4\u65B0\u6210\u529F"));
   });
 }

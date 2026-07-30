@@ -1,4 +1,4 @@
-import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputFormat } from '../core/utils.js';
+import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputFormat, deepMerge } from '../core/utils.js';
 import { formatOutput, formatSuccess } from '../core/formatter.js';
 import { readFileSync } from 'node:fs';
 
@@ -53,12 +53,22 @@ export async function reportCreate(options: any): Promise<void> {
 
 export async function reportUpdate(id: string, options: any): Promise<void> {
   await executeCommand(async () => {
-    const data: any = {};
-    if (options.name) data.name = options.name;
-    if (options.description) data.description = options.description;
-    if (options.config) data.config = JSON.parse(options.config);
     const client = getApiClient();
-    await client.updateReport(id, data);
+
+    // 1️⃣ 先获取原始报表
+    const original = await client.getReportById(id);
+
+    // 2️⃣ 构建部分更新对象
+    const partialData: any = {};
+    if (options.name !== undefined) partialData.name = options.name;
+    if (options.description !== undefined) partialData.description = options.description;
+    if (options.config !== undefined) partialData.config = JSON.parse(options.config);
+
+    // 3️⃣ 合并数据
+    const merged = deepMerge(original, partialData);
+
+    // 4️⃣ 调用更新接口
+    await client.updateReport(id, merged);
     console.log(formatSuccess('更新成功'));
   });
 }

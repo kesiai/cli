@@ -1,4 +1,4 @@
-import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputFormat } from '../core/utils.js';
+import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputFormat, deepMerge } from '../core/utils.js';
 import { formatOutput, formatSuccess } from '../core/formatter.js';
 
 // ==================== 报警规则 ====================
@@ -39,12 +39,22 @@ export async function warningRulesCreate(options: any): Promise<void> {
 export async function warningRulesUpdate(id: string, options: any): Promise<void> {
   await executeCommand(async () => {
     const client = getApiClient();
-    const data: any = {};
-    if (options.name !== undefined) data.name = options.name;
-    if (options.level !== undefined) data.level = Number(options.level);
-    if (options.enable !== undefined) data.enable = options.enable !== 'false';
-    if (options.description !== undefined) data.description = options.description;
-    await client.updateWarningRule(id, data);
+
+    // 1️⃣ 先获取原始规则
+    const original = await client.getWarningRuleById(id);
+
+    // 2️⃣ 构建部分更新对象
+    const partialData: any = {};
+    if (options.name !== undefined) partialData.name = options.name;
+    if (options.level !== undefined) partialData.level = Number(options.level);
+    if (options.enable !== undefined) partialData.enable = options.enable !== 'false';
+    if (options.description !== undefined) partialData.description = options.description;
+
+    // 3️⃣ 合并数据
+    const merged = deepMerge(original, partialData);
+
+    // 4️⃣ 调用更新接口
+    await client.updateWarningRule(id, merged);
     console.log(formatSuccess('更新成功'));
   });
 }

@@ -1,4 +1,4 @@
-import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputFormat } from '../core/utils.js';
+import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputFormat, deepMerge } from '../core/utils.js';
 import { formatOutput, formatSuccess } from '../core/formatter.js';
 import { readFileSync } from 'node:fs';
 import { validateTableFields, formatValidationResult } from '../core/field-validator.js';
@@ -54,17 +54,25 @@ export async function tableCreate(options: any): Promise<void> {
 
 export async function tableUpdate(id: string, options: any): Promise<void> {
   await executeCommand(async () => {
-    let data: any;
+    let partialData: any;
     if (options.json) {
-      data = JSON.parse(options.json);
+      partialData = JSON.parse(options.json);
     } else if (options.file) {
-      data = JSON.parse(readFileSync(options.file, 'utf-8'));
+      partialData = JSON.parse(readFileSync(options.file, 'utf-8'));
     } else {
       throw new Error('请提供 --json 或 --file 参数');
     }
 
-    // 验证字段配置
-    const validationResult = validateTableFields(data);
+    const client = getApiClient();
+
+    // 1️⃣ 先获取原始表结构
+    const original = await client.getTableById(id);
+
+    // 2️⃣ 深度合并（注意 properties 等嵌套字段）
+    const merged = deepMerge(original, partialData);
+
+    // 3️⃣ 验证合并后的完整数据
+    const validationResult = validateTableFields(merged);
     const format = (options.output === 'json') ? 'json' : 'text';
 
     // 显示验证结果
@@ -75,9 +83,8 @@ export async function tableUpdate(id: string, options: any): Promise<void> {
       throw new Error('字段验证失败，请修复后重试');
     }
 
-    // 验证通过，继续更新
-    const client = getApiClient();
-    await client.updateTable(id, data);
+    // 4️⃣ 调用更新接口
+    await client.updateTable(id, merged);
     console.log(formatSuccess('更新成功'));
   });
 }

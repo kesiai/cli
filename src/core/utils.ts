@@ -49,3 +49,43 @@ export function normalizeQueryOptions(options: any): Record<string, any> {
     withCount: options.withCount ?? false,
   };
 }
+
+/**
+ * 深度合并两个对象
+ * @param target 原始对象（会被修改）
+ * @param source 要合并的对象
+ * @returns 合并后的对象
+ *
+ * 规则：
+ * - source 中的非 undefined 值会覆盖 target
+ * - 对象类型会递归合并
+ * - 数组会直接替换（不是合并）
+ * - undefined 值会被忽略（保留 target 的值）
+ */
+export function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
+  const result = { ...target };
+
+  for (const key in source) {
+    if (source[key] === undefined) {
+      // 忽略 undefined 值，保留原始值
+      continue;
+    }
+
+    const sourceValue = source[key];
+    const targetValue = result[key];
+
+    if (isObject(sourceValue) && isObject(targetValue)) {
+      // 递归合并对象
+      result[key] = deepMerge(targetValue, sourceValue);
+    } else {
+      // 直接覆盖（包括数组、基本类型等）
+      result[key] = sourceValue;
+    }
+  }
+
+  return result;
+}
+
+function isObject(value: any): value is Record<string, any> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
