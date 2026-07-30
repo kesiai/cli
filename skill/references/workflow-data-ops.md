@@ -53,7 +53,7 @@ $K query <resource> [-f filter] [-l limit]    # 如 core/user、core/department�
 $K query-get <resource> <id>
 ```
 
-> 记录命令详细参数见 [record.md](record.md)，表命令见 [table/table.md](table/table.md)，内置资源路径见主文档「命令速查 → 通用资源查询」，查询/过滤语法见 [query-syntax.md](query-syntax.md)。
+> 记录命令详细参数见 [record.md](record.md)，表命令见 [table-management.md](table-management.md)，内置资源路径见主文档「命令速查 → 通用资源查询」，查询/过滤语法见 [query-syntax.md](query-syntax.md)。
 
 ---
 

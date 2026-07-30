@@ -50,4 +50,4 @@ $K report-execute <id> --file params.json
 
 ## 关联
 
-- 报表通常基于表数据，表管理见 [table.md](table/table.md)
+- 报表通常基于表数据，表管理见 [table-management.md](table-management.md)

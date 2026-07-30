@@ -20,11 +20,11 @@
 
 | 配置项 | 文档 | 说明 |
 |--------|------|------|
-| 数据点 | [device/tag.md](device/tag.md) | 点位基础+驱动字段、数值转换、点位报警、数据处理、仿真 |
-| 指令 | [device/command.md](device/command.md) | 远程控制指令、writeIn/writeOut 配置 |
-| 事件 | [device/event.md](device/event.md) | 设备生命周期事件 |
-| 报警规则 | [device/warning-rule.md](device/warning-rule.md) | 表级报警规则、jsonlogic 表达式 |
-| 计算节点 | [device/computed.md](device/computed.md) | 映射/计算/统计/输入节点 |
+| 数据点 | [device-tag.md](device-tag.md) | 点位基础+驱动字段、数值转换、点位报警、数据处理、仿真 |
+| 指令 | [device-command.md](device-command.md) | 远程控制指令、writeIn/writeOut 配置 |
+| 事件 | [device-event.md](device-event.md) | 设备生命周期事件 |
+| 报警规则 | [device-warning-rule.md](device-warning-rule.md) | 表级报警规则、jsonlogic 表达式 |
+| 计算节点 | [device-computed.md](device-computed.md) | 映射/计算/统计/输入节点 |
 
 ## 命令
 
@@ -203,11 +203,11 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
 
 ## 关联
 
-- 表管理：[table/table.md](table/table.md)
+- 表管理：[table-management.md](table-management.md)
 - 记录管理：[record.md](record.md)
 - 报警管理：[warning.md](warning.md)
-- 数据点详细：[device/tag.md](device/tag.md)
-- 指令详细：[device/command.md](device/command.md)
-- 事件详细：[device/event.md](device/event.md)
-- 报警规则详细：[device/warning-rule.md](device/warning-rule.md)
-- 计算节点详细：[device/computed.md](device/computed.md)
+- 数据点详细：[device-tag.md](device-tag.md)
+- 指令详细：[device-command.md](device-command.md)
+- 事件详细：[device-event.md](device-event.md)
+- 报警规则详细：[device-warning-rule.md](device-warning-rule.md)
+- 计算节点详细：[device-computed.md](device-computed.md)

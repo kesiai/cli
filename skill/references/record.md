@@ -94,5 +94,5 @@ $K records-batch-delete <table> <id1> <id2> <id3>
 
 ## 关联
 
-- 表管理见 [table.md](table/table.md)
+- 表管理见 [table-management.md](table-management.md)
 - 设备表记录的额外操作见 [device.md](device.md)

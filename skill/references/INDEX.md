@@ -16,23 +16,23 @@
 | [user.md](user.md) | 用户管理 | 平台用户查询 |
 | [warning.md](warning.md) | 报警系统 | 报警规则 + 报警事件两部分 |
 
-## 设备子系统（references/device/）
+## 设备子系统（device-* 系列）
 
 | 文件 | 主题 | 说明 |
 |------|------|------|
-| [device/command.md](device/command.md) | 远程指令 | 设备控制指令（启停、阀门开度等） |
-| [device/computed.md](device/computed.md) | 计算节点 | 原始数据点派生的计算值（露点、均值、运行时长） |
-| [device/event.md](device/event.md) | 设备事件 | 生命周期事件（上线、离线、故障） |
-| [device/tag.md](device/tag.md) | 数据点定义 | 核心：设备采集什么数据、如何采集和处理 |
-| [device/warning-rule.md](device/warning-rule.md) | 报警规则 | 表级报警规则，支持 jsonlogic 跨数据点复杂逻辑 |
+| [device-command.md](device-command.md) | 远程指令 | 设备控制指令（启停、阀门开度等） |
+| [device-computed.md](device-computed.md) | 计算节点 | 原始数据点派生的计算值（露点、均值、运行时长） |
+| [device-event.md](device-event.md) | 设备事件 | 生命周期事件（上线、离线、故障） |
+| [device-tag.md](device-tag.md) | 数据点定义 | 核心：设备采集什么数据、如何采集和处理 |
+| [device-warning-rule.md](device-warning-rule.md) | 报警规则 | 表级报警规则，支持 jsonlogic 跨数据点复杂逻辑 |
 
-## 表系统（references/table/）
+## 表系统（table-* 系列）
 
 | 文件 | 主题 | 说明 |
 |------|------|------|
-| [table/table.md](table/table.md) | 表管理 | 表 CRUD、schema 查询 |
-| [table/table-schema.md](table/table-schema.md) | 表 Schema 结构 | 创建/定义表的 JSON schema（POST 格式） |
-| [table/field-rules.md](table/field-rules.md) | 字段规则 | 交互规则（mutualRules）+ 字段校验（validations） |
+| [table-management.md](table-management.md) | 表管理 | 表 CRUD、schema 查询 |
+| [table-schema.md](table-schema.md) | 表 Schema 结构 | 创建/定义表的 JSON schema（POST 格式） |
+| [table-field-rules.md](table-field-rules.md) | 字段规则 | 交互规则（mutualRules）+ 字段校验（validations） |
 
 ## 字段控件类型（references/table/controls/）
 
@@ -65,18 +65,13 @@
 | bytes-array | [controls/bytes-array.md](table/controls/bytes-array.md) | 字节数组 |
 | user-role | [controls/user-role.md](table/controls/user-role.md) | 用户选择 |
 
-## 模板（references/templates/）
-
-| 文件 | 说明 |
-|------|------|
-| [templates/seed-template.md](templates/seed-template.md) | seed.json 完整结构模板（common 表 + device 表） |
-
 ## 按场景速查
 
 | 场景 | 推荐阅读顺序 |
 |------|------------|
-| 创建普通表 | table/table.md → table/table-schema.md → 查阅对应 controls/*.md → templates/seed-template.md |
-| 创建设备表 | device.md → device/tag.md → table/table.md → 查阅 controls/*.md → templates/seed-template.md |
-| 查询数据 | query-syntax.md → record.md |
-| 报警配置 | warning.md → device/warning-rule.md |
-| 文件上传 | file.md → controls/upload.md |
+| 创建普通表 | [../table-guides/common-table-guide.md](../table-guides/common-table-guide.md) |
+| 创建设备表 | [../table-guides/device-table-guide.md](../table-guides/device-table-guide.md) |
+| 创建组织表 | [../table-guides/department-table-guide.md](../table-guides/department-table-guide.md) |
+| 查询数据 | [query-syntax.md](query-syntax.md) → [record.md](record.md) |
+| 报警配置 | [warning.md](warning.md) → [device-warning-rule.md](device-warning-rule.md) |
+| 文件上传 | [file.md](file.md) → [controls/upload.md](controls/upload.md) |
