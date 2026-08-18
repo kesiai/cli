@@ -267,13 +267,12 @@ $K query driver/driverInstance --limit 50
 
 ## 五、前端代码对照
 
-前端项目使用 `createResourceClient` 时，查询参数对应关系：
+前端项目使用 `createAPI` 时，查询参数对应关系：
 
 ```typescript
-import { createHttpClient, createResourceClient } from '@kesi/client'
+import { createAPI } from '@kesi/client'
 
-const client = createHttpClient({ resource: 'core/t/energy_meter/d' })
-const meterApi = createResourceClient<EnergyMeter>({ client, resource: 'core/t/energy_meter/d' })
+const meterApi = createAPI({ resource: 'core/t/energy_meter/d', projectAll: true })
 
 // CLI:  $K records energy_meter --limit 10 -s '{"createTime":-1}'
 // 前端:
@@ -297,7 +296,7 @@ const { items, total } = await meterApi.query(
 
 // CLI:  $K records energy_meter --limit 1 --with-count -f '{"online":true}'
 // 前端:
-const count = await meterApi.count({ online: { $eq: true } })
+const count = await meterApi.count({ where: { online: { $eq: true } } })
 ```
 
 **参数映射：**
