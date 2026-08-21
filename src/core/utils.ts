@@ -62,8 +62,8 @@ export function normalizeQueryOptions(options: any): Record<string, any> {
  * - 数组会直接替换（不是合并）
  * - undefined 值会被忽略（保留 target 的值）
  */
-export function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
-  const result = { ...target };
+export function deepMerge<T extends Record<string, any>>(target: T, source: Record<string, any>): T {
+  const result: Record<string, any> = { ...target };
 
   for (const key in source) {
     if (source[key] === undefined) {
@@ -83,7 +83,7 @@ export function deepMerge<T extends Record<string, any>>(target: T, source: Part
     }
   }
 
-  return result;
+  return result as T;
 }
 
 function isObject(value: any): value is Record<string, any> {

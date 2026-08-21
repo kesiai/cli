@@ -62,13 +62,18 @@ $K stats-online <tableId1> <tableId2> ...
 $K drivers                       # 列出驱动实例
 $K driver <id>                   # 驱动详情
 $K driver-schema <driverType>    # 驱动 schema（点位必填字段、settings 配置）
+$K driver-catalog [--search kw]  # 驱动目录（可安装列表，含已安装注记）
 ```
+
+**实例 state 枚举**：`none`（未创建）/ `restarting`（重启中）/ `running`（运行中）/ `stop`（停止）。
+平台没有所需驱动时，走 [workflow-driver-create.md](workflow-driver-create.md) 自动创建安装。
 
 ## ⚠️ 设备表创建要点
 
 ### 创建流程
 
 ```
+0. $K drivers                        → 无可用驱动？走 workflow-driver-create.md 创建安装
 1. $K drivers                        → 选择驱动
 2. $K driver <id>                    → 获取 settings 配置
 3. $K driver-schema <driverType>     → 获取点位字段定义
@@ -195,7 +200,7 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
 | `id` | 驱动实例 ID |
 | `name` | 驱动名称 |
 | `driverType` | 驱动类型：`modbus`、`opcua`、`mqtt` 等 |
-| `state` | 运行状态：`running`、`stopped` |
+| `state` | 运行状态：`none`、`restarting`、`running`、`stop` |
 | `driverVersion` | 驱动版本 |
 | `runMode` | 运行模式：`one` |
 | `ports` | 端口映射 |

@@ -21213,6 +21213,58 @@ Content-Type: ${mime}\r
     const jsonStr = trimmed.startsWith("(") && trimmed.endsWith(")") ? trimmed.slice(1, -1) : trimmed;
     return JSON.parse(jsonStr);
   }
+  // ==================== 驱动目录 / 实例管理 / 安装 ====================
+  /** 驱动目录（可安装驱动列表）。⚠️ 条目的 driverType 是分类路径，name 才是驱动 key */
+  async getDriverCatalog(params) {
+    const query = {
+      sort: { order: 1 },
+      ...params
+    };
+    const res = await this.http.get("/driver/driver", {
+      params: { query: JSON.stringify(query) }
+    });
+    return Array.isArray(res.data) ? res.data : res.data?.list || [];
+  }
+  /**
+   * 创建驱动实例，返回实例 id
+   * ⚠️ 名称不可重复；创建成功后后续保存一律走 updateDriverInstance，禁止再次 POST（重名报错）
+   */
+  async createDriverInstance(data) {
+    const res = await this.http.post("/driver/driverInstance", data);
+    return res.data?.InsertedID || res.data?.id;
+  }
+  /** 更新驱动实例（partialSave）。配置保存在 device 块：{settings, tags, commands, events} */
+  async updateDriverInstance(id, data) {
+    await this.http.patch(`/driver/driverInstance/${id}`, data);
+  }
+  /** 删除驱动实例 */
+  async deleteDriverInstance(id) {
+    await this.http.delete(`/driver/driverInstance/${id}`);
+  }
+  /** 触发驱动安装（body: {url, id: 驱动key, instanceId}），返回 taskId */
+  async installDriver(url2, driverKey, instanceId) {
+    const res = await this.http.post("/driver/driver/install", { url: url2, id: driverKey, instanceId });
+    return res.data?.id;
+  }
+  /** 安装进度：{download?, install?, run?}，各含 {progress, err, outInfo}。阶段完成后对应字段会从响应中消失 */
+  async getInstallInfo(taskId) {
+    const res = await this.http.get(`/driver/installInfo/${taskId}`);
+    return res.data || {};
+  }
+  /** 已运行驱动服务列表（安装完成后校验 Meta.serviceId === instanceId） */
+  async getDriverServiceList() {
+    const res = await this.http.get("/driver/driver/serviceList");
+    return res.data || [];
+  }
+  /** 重启驱动（配置变更后生效）：POST /driver/driver/{groupId}/change/config（按 groupId 路由，非实例 id） */
+  async restartDriver(groupId) {
+    await this.http.post(`/driver/driver/${groupId}/change/config`);
+  }
+  /** 从实例列表读取 state（⚠️ 详情接口不返回 state 字段，只有列表 projection 带） */
+  async getDriverInstanceState(instanceId) {
+    const list = await this.getDriverInstances({ limit: 1e3 });
+    return list.find((i) => i.id === instanceId || i._id === instanceId)?.state;
+  }
   // ==================== 通用 Resource 查询 ====================
   async queryResource(resource, params) {
     const query = {
@@ -22091,6 +22143,7 @@ async function usersList(options) {
 }
 
 // src/commands/driver.ts
+var import_node_fs7 = require("node:fs");
 async function driversList(options) {
   await executeCommand(async () => {
     const client = getApiClient();
@@ -22106,6 +22159,90 @@ async function driverGet(id, options) {
     if (!detail) throw new Error(`\u9A71\u52A8\u5B9E\u4F8B '${id}' \u4E0D\u5B58\u5728`);
     const format = resolveOutputFormat(options.output);
     console.log(formatOutput(detail, format));
+  });
+}
+async function driverCreate(options) {
+  await executeCommand(async () => {
+    let payload = {
+      name: options.name,
+      driverType: options.type,
+      driverVersion: options.version,
+      runMode: options.runMode || "one",
+      distributed: options.distributed || "all",
+      disable: false,
+      stopAcquisition: false,
+      autoUpdateConfig: false,
+      debug: false,
+      description: options.description || "",
+      state: "none",
+      device: { tags: [], commands: [], events: [], settings: {} }
+    };
+    if (options.json) {
+      payload = deepMerge(payload, JSON.parse(options.json));
+    } else if (options.file) {
+      payload = deepMerge(payload, JSON.parse((0, import_node_fs7.readFileSync)(options.file, "utf-8")));
+    }
+    if (!payload.name?.trim()) throw new Error("\u8BF7\u63D0\u4F9B\u9A71\u52A8\u540D\u79F0 (-n)");
+    if (!payload.driverType) throw new Error("\u8BF7\u63D0\u4F9B\u9A71\u52A8\u7C7B\u578B key (-t\uFF0C\u5373 driver-catalog \u8F93\u51FA\u7684 name \u5B57\u6BB5)");
+    const client = getApiClient();
+    const instances = await client.getDriverInstances({ limit: 1e3 });
+    const existed = instances.find((i) => i.name === payload.name);
+    if (existed) {
+      throw new Error(`\u9A71\u52A8\u540D\u79F0\u5DF2\u5B58\u5728: ${payload.name}\uFF08\u5B9E\u4F8BID: ${existed.id}\uFF09\uFF0C\u5982\u9700\u590D\u7528\u8BF7\u76F4\u63A5\u4F7F\u7528\u8BE5\u5B9E\u4F8B`);
+    }
+    if (!payload.driverVersion) {
+      const catalog = await client.getDriverCatalog();
+      const entry = catalog.find((c) => c.name === payload.driverType);
+      if (entry?.version) payload.driverVersion = entry.version;
+    }
+    let id = await client.createDriverInstance(payload);
+    if (!id) {
+      const after = await client.getDriverInstances({ limit: 1e3 });
+      id = after.find((i) => i.name === payload.name)?.id;
+    }
+    if (!id) throw new Error("\u521B\u5EFA\u7ED3\u679C\u5F02\u5E38\uFF1A\u54CD\u5E94\u65E0 id \u4E14\u6309\u540D\u79F0\u56DE\u67E5\u5931\u8D25\uFF0C\u8BF7\u7528 drivers \u547D\u4EE4\u786E\u8BA4\u540E\u518D\u64CD\u4F5C");
+    console.log(formatSuccess(`\u9A71\u52A8\u5B9E\u4F8B\u521B\u5EFA\u6210\u529F`));
+    console.log(formatOutput(
+      {
+        id,
+        name: payload.name,
+        driverType: payload.driverType,
+        driverVersion: payload.driverVersion,
+        runMode: payload.runMode,
+        distributed: payload.distributed,
+        hint: `\u4E0B\u4E00\u6B65: driver-install -i ${id}`
+      },
+      resolveOutputFormat(options.output)
+    ));
+  });
+}
+async function driverRestart(id, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const instance = await client.getDriverInstanceById(id);
+    if (!instance) throw new Error(`\u9A71\u52A8\u5B9E\u4F8B '${id}' \u4E0D\u5B58\u5728`);
+    const groupId = instance.groupId || id;
+    await client.restartDriver(groupId);
+    let state = "";
+    if (options.wait !== false) {
+      for (let i = 0; i < 30; i++) {
+        state = await client.getDriverInstanceState(id) || "";
+        if (state === "running") break;
+        await new Promise((r) => setTimeout(r, 2e3));
+      }
+    } else {
+      state = await client.getDriverInstanceState(id) || "";
+    }
+    console.log(formatOutput({ ok: true, instanceId: id, state }, resolveOutputFormat(options.output)));
+    if (options.wait !== false && state !== "running") process.exitCode = 1;
+  });
+}
+async function driverDelete(id, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    await client.deleteDriverInstance(id);
+    console.log(formatSuccess(`\u9A71\u52A8\u5B9E\u4F8B\u5DF2\u5220\u9664: ${id}`));
+    console.log(formatOutput({ ok: true, id }, resolveOutputFormat(options.output)));
   });
 }
 
@@ -22173,6 +22310,174 @@ async function driverSchema(driverType, options) {
   });
 }
 
+// src/commands/driver-catalog.ts
+async function driverCatalog(options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const catalog = await client.getDriverCatalog();
+    const instances = await client.getDriverInstances({ limit: 1e3 });
+    const installedByKey = /* @__PURE__ */ new Map();
+    for (const inst of instances) {
+      if (inst.driverType && !installedByKey.has(inst.driverType)) {
+        installedByKey.set(inst.driverType, inst);
+      }
+    }
+    let items = catalog.map((item) => {
+      const inst = installedByKey.get(item.name);
+      return {
+        name: item.name,
+        // 驱动 key（driver-create --type 用这个）
+        category: item.driverType,
+        // 分类路径（勿当驱动类型用）
+        order: item.order,
+        description: item.description,
+        version: item.version,
+        localVersion: item.localVersion,
+        url: item.url,
+        installed: !!inst,
+        installedInstanceId: inst?.id,
+        installedState: inst?.state
+      };
+    });
+    if (options.search) {
+      const kw = String(options.search).toLowerCase();
+      items = items.filter(
+        (it) => [it.name, it.description, it.category].some((v) => String(v || "").toLowerCase().includes(kw))
+      );
+    }
+    const format = resolveOutputFormat(options.output);
+    console.log(formatOutput(items, format));
+  });
+}
+
+// src/commands/driver-install.ts
+var STAGE_LABEL = { download: "\u4E0B\u8F7D", install: "\u5B89\u88C5", run: "\u542F\u52A8" };
+var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function resolveStage(info) {
+  for (const key of ["download", "install", "run"]) {
+    const seg = info?.[key];
+    if (seg?.err) return { stage: key, done: false, error: seg.err };
+  }
+  if (info?.run?.progress === 100) return { stage: "run", done: true, error: null };
+  for (const key of ["run", "install", "download"]) {
+    const seg = info?.[key];
+    if (seg && seg.progress < 100) return { stage: key, done: false, error: null };
+  }
+  return { stage: "waiting", done: false, error: null };
+}
+async function driverInstall(instanceId, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const instance = await client.getDriverInstanceById(instanceId);
+    if (!instance) throw new Error(`\u9A71\u52A8\u5B9E\u4F8B '${instanceId}' \u4E0D\u5B58\u5728`);
+    const catalog = await client.getDriverCatalog();
+    const url2 = options.url ?? catalog.find((c) => c.name === instance.driverType)?.url ?? "";
+    const taskId = await client.installDriver(url2, instance.driverType, instanceId);
+    if (!taskId) throw new Error("\u89E6\u53D1\u9A71\u52A8\u5B89\u88C5\u5931\u8D25\uFF1A\u54CD\u5E94\u4E2D\u65E0 taskId");
+    if (options.wait === false) {
+      console.log(formatOutput({ instanceId, taskId, status: "triggered" }, resolveOutputFormat(options.output)));
+      return;
+    }
+    const timeoutMs = (Number(options.timeout) || 300) * 1e3;
+    const intervalMs = (Number(options.interval) || 2) * 1e3;
+    const startAt = Date.now();
+    let stage = "";
+    let error = null;
+    let done = false;
+    while (Date.now() - startAt < timeoutMs) {
+      const info = await client.getInstallInfo(taskId);
+      const resolved = resolveStage(info);
+      stage = resolved.stage;
+      error = resolved.error;
+      done = resolved.done;
+      const seg = info?.[resolved.stage];
+      if (seg?.progress !== void 0) {
+        process.stderr.write(`\r${STAGE_LABEL[stage] || stage} ${seg.progress}%   `);
+      } else if (stage === "waiting") {
+        process.stderr.write("\r\u7B49\u5F85\u9A71\u52A8\u542F\u52A8...   ");
+      }
+      if (done || error) break;
+      await sleep(intervalMs);
+    }
+    process.stderr.write("\n");
+    if (error || !done) {
+      const result = {
+        instanceId,
+        taskId,
+        status: error ? "failed" : "timeout",
+        stage,
+        err: error || void 0,
+        hint: error ? `\u91CD\u8BD5\u8BF7\u91CD\u8DD1 driver-install -i ${instanceId}\uFF08\u590D\u7528\u540C\u4E00\u5B9E\u4F8B\uFF0C\u7981\u6B62\u91CD\u65B0\u521B\u5EFA\uFF09` : `\u5B89\u88C5\u4ECD\u5728\u8FDB\u884C\uFF0C\u7528 driver-install-info ${taskId} \u7EED\u67E5\u8FDB\u5EA6`
+      };
+      console.log(formatOutput(result, resolveOutputFormat(options.output)));
+      process.exitCode = 1;
+      return;
+    }
+    let state = "none";
+    for (let i = 0; i < 15; i++) {
+      state = await client.getDriverInstanceState(instanceId) || "none";
+      if (state !== "none") break;
+      await sleep(2e3);
+    }
+    let verify = "ok";
+    try {
+      const services = await client.getDriverServiceList();
+      if (!services.some((s) => s?.Meta?.serviceId === instanceId)) {
+        verify = "service-missing";
+      }
+    } catch {
+      verify = "service-missing";
+    }
+    console.log(formatOutput(
+      { instanceId, taskId, status: "completed", stage, state, verify },
+      resolveOutputFormat(options.output)
+    ));
+    if (verify === "service-missing") process.exitCode = 1;
+  });
+}
+async function driverInstallInfo(taskId, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const info = await client.getInstallInfo(taskId);
+    const { stage, done, error } = resolveStage(info);
+    console.log(formatOutput(
+      { stage, done, error, download: info?.download, install: info?.install, run: info?.run },
+      resolveOutputFormat(options.output)
+    ));
+  });
+}
+
+// src/commands/driver-update-config.ts
+var import_node_fs8 = require("node:fs");
+async function driverUpdateConfig(id, options) {
+  await executeCommand(async () => {
+    let incoming;
+    if (options.json) {
+      incoming = JSON.parse(options.json);
+    } else if (options.file) {
+      incoming = JSON.parse((0, import_node_fs8.readFileSync)(options.file, "utf-8"));
+    } else {
+      throw new Error("\u8BF7\u63D0\u4F9B --json \u6216 --file \u53C2\u6570");
+    }
+    const incomingDevice = incoming.device ?? incoming;
+    const client = getApiClient();
+    const instance = await client.getDriverInstanceById(id);
+    if (!instance) throw new Error(`\u9A71\u52A8\u5B9E\u4F8B '${id}' \u4E0D\u5B58\u5728`);
+    const mergedDevice = deepMerge(instance.device || {}, incomingDevice);
+    await client.updateDriverInstance(id, { device: mergedDevice });
+    console.log(formatOutput(
+      {
+        ok: true,
+        instanceId: id,
+        tags: mergedDevice.tags?.length || 0,
+        commands: mergedDevice.commands?.length || 0,
+        settingsKeys: Object.keys(mergedDevice.settings || {})
+      },
+      resolveOutputFormat(options.output)
+    ));
+  });
+}
+
 // src/commands/query.ts
 async function queryList(resource, options) {
   await executeCommand(async () => {
@@ -22215,7 +22520,7 @@ async function queryGet(resource, id, options) {
 }
 
 // src/commands/ai/scan.ts
-var import_node_fs7 = require("node:fs");
+var import_node_fs9 = require("node:fs");
 async function scan(options) {
   await executeCommand(async () => {
     const client = getApiClient();
@@ -22290,7 +22595,7 @@ async function scan(options) {
     };
     const format = resolveOutputFormat(options.output);
     if (options.outputFile) {
-      (0, import_node_fs7.writeFileSync)(options.outputFile, JSON.stringify(output, null, 2), "utf-8");
+      (0, import_node_fs9.writeFileSync)(options.outputFile, JSON.stringify(output, null, 2), "utf-8");
       console.error(`\u5DF2\u5199\u5165: ${options.outputFile}`);
       if (format === "json") {
         console.log(JSON.stringify({ tableCount: output.tableCount, outputFile: options.outputFile }));
@@ -22493,7 +22798,7 @@ async function sample(tableId, options) {
 }
 
 // src/commands/ai/seed.ts
-var import_node_fs8 = require("node:fs");
+var import_node_fs10 = require("node:fs");
 function validateTableSchema(tableSchema, index) {
   const warnings2 = [];
   const title = tableSchema.title || tableSchema.id || `\u8868 #${index + 1}`;
@@ -22541,7 +22846,7 @@ async function seed(options) {
   await executeCommand(async () => {
     let data;
     if (options.file) {
-      data = JSON.parse((0, import_node_fs8.readFileSync)(options.file, "utf-8"));
+      data = JSON.parse((0, import_node_fs10.readFileSync)(options.file, "utf-8"));
     } else if (options.json) {
       data = JSON.parse(options.json);
     } else {
@@ -22646,6 +22951,13 @@ addOutput(program2.command("user").description("\u5F53\u524D\u7528\u6237")).acti
 addOutput(program2.command("users").description("\u7528\u6237\u5217\u8868").option("-f, --filter <json>", "\u8FC7\u6EE4").option("-l, --limit <number>", "\u6570\u91CF\u9650\u5236")).action(usersList);
 addOutput(program2.command("drivers").description("\u9A71\u52A8\u5B9E\u4F8B\u5217\u8868")).action(driversList);
 addOutput(program2.command("driver <id>").description("\u9A71\u52A8\u5B9E\u4F8B\u8BE6\u60C5")).action(driverGet);
+addOutput(program2.command("driver-catalog").description("\u9A71\u52A8\u76EE\u5F55\uFF08\u53EF\u5B89\u88C5\u9A71\u52A8\u5217\u8868\uFF0C\u542B\u5DF2\u5B89\u88C5\u6CE8\u8BB0\uFF09").option("--search <keyword>", "\u5173\u952E\u8BCD\u8FC7\u6EE4\uFF08\u5339\u914D key/\u63CF\u8FF0/\u5206\u7C7B\uFF09")).action(driverCatalog);
+program2.command("driver-create").description("\u521B\u5EFA\u9A71\u52A8\u5B9E\u4F8B\uFF08-t \u586B\u9A71\u52A8 key\uFF0C\u5373 driver-catalog \u7684 name \u5B57\u6BB5\uFF09").requiredOption("-n, --name <name>", "\u5B9E\u4F8B\u540D\u79F0\uFF08\u552F\u4E00\uFF09").requiredOption("-t, --type <driverKey>", "\u9A71\u52A8 key").option("--version <version>", "\u9A71\u52A8\u7248\u672C\uFF08\u7F3A\u7701\u4ECE\u76EE\u5F55\u89E3\u6790\uFF09").option("--run-mode <mode>", "\u8FD0\u884C\u6A21\u5F0F: one | cluster | node", "one").option("--distributed <mode>", "\u5206\u914D\u65B9\u5F0F: all | average | lazy", "all").option("-d, --description <text>", "\u63CF\u8FF0").option("--file <path>", "\u5B8C\u6574 payload JSON \u6587\u4EF6\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").option("--json <json>", "\u5B8C\u6574 payload JSON\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").action(driverCreate);
+addOutput(program2.command("driver-install <instanceId>").description("\u5B89\u88C5\u9A71\u52A8\uFF08\u9ED8\u8BA4\u963B\u585E\u7B49\u5F85\u5230\u5B8C\u6210\uFF0C\u8FDB\u5EA6\u8D70 stderr\uFF09").option("--url <url>", "\u5B89\u88C5\u5305\u5730\u5740\uFF08\u7F3A\u7701\u4ECE\u9A71\u52A8\u76EE\u5F55\u89E3\u6790\uFF09").option("--no-wait", "\u53EA\u89E6\u53D1\u5B89\u88C5\uFF0C\u7ACB\u5373\u8FD4\u56DE taskId").option("--timeout <seconds>", "\u7B49\u5F85\u8D85\u65F6\uFF08\u79D2\uFF09", "300").option("--interval <seconds>", "\u8F6E\u8BE2\u95F4\u9694\uFF08\u79D2\uFF09", "2")).action(driverInstall);
+addOutput(program2.command("driver-install-info <taskId>").description("\u67E5\u8BE2\u5B89\u88C5\u8FDB\u5EA6\uFF08--no-wait / \u8D85\u65F6\u540E\u7EED\u67E5\u7528\uFF09")).action(driverInstallInfo);
+program2.command("driver-update-config <instanceId>").description("\u66F4\u65B0\u9A71\u52A8\u914D\u7F6E\uFF08device \u5757: settings/tags/commands/events\uFF0C\u6DF1\u5408\u5E76\uFF09").option("--file <path>", "\u914D\u7F6E JSON \u6587\u4EF6").option("--json <json>", "\u914D\u7F6E JSON \u6570\u636E").action(driverUpdateConfig);
+addOutput(program2.command("driver-restart <instanceId>").description("\u91CD\u542F\u9A71\u52A8\uFF08\u914D\u7F6E\u53D8\u66F4\u540E\u751F\u6548\uFF09\uFF0C\u9ED8\u8BA4\u8F6E\u8BE2 state \u5230 running").option("--no-wait", "\u4E0D\u7B49\u5F85 running")).action(driverRestart);
+program2.command("driver-delete <instanceId>").description("\u5220\u9664\u9A71\u52A8\u5B9E\u4F8B\uFF08\u4F1A\u4F7F\u5176\u7ED1\u5B9A\u7684\u8BBE\u5907\u8868\u5931\u6548\uFF09").action(driverDelete);
 addOutput(program2.command("driver-schema <driverType>").description("\u83B7\u53D6\u9A71\u52A8 schema\uFF08\u70B9\u4F4D\u5B57\u6BB5\u3001settings \u914D\u7F6E\u7B49\uFF09")).action(driverSchema);
 addOutput(program2.command("query <resource>").description("\u67E5\u8BE2\u4EFB\u610F\u8D44\u6E90\uFF08\u5982 core/role, warning/rule\uFF09").option("-f, --filter <json>", "\u8FC7\u6EE4\u6761\u4EF6").option("-s, --sort <json>", "\u6392\u5E8F").option("-l, --limit <number>", "\u6570\u91CF\u9650\u5236", "20").option("--skip <number>", "\u8DF3\u8FC7\u6761\u6570", "0").option("--with-count", "\u8FD4\u56DE\u603B\u6570")).action(queryList);
 addOutput(program2.command("query-get <resource> <id>").description("\u83B7\u53D6\u8D44\u6E90\u5355\u6761\u8BB0\u5F55")).action(queryGet);

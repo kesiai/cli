@@ -120,7 +120,11 @@
    $K driver <id>                    # 获取驱动详情（含 settings）
    ```
 
-2. 参考 [../references/device.md](../references/device.md) - 驱动配置完整文档
+2. **平台没有所需驱动时**：用 `$K driver-catalog --search <关键词>` 匹配驱动目录，
+   经用户确认后走 [../references/workflow-driver-create.md](../references/workflow-driver-create.md)
+   自动创建安装，完成后带着新实例回到本部分
+
+3. 参考 [../references/device.md](../references/device.md) - 驱动配置完整文档
 
 ### 写数据
 

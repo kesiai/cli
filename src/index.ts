@@ -15,6 +15,9 @@ import * as report from './commands/report.js';
 import * as user from './commands/user.js';
 import * as driver from './commands/driver.js';
 import * as driverSchema from './commands/driver-schema.js';
+import * as driverCatalog from './commands/driver-catalog.js';
+import * as driverInstall from './commands/driver-install.js';
+import * as driverUpdateConfig from './commands/driver-update-config.js';
 import * as query from './commands/query.js';
 import { setCliCredentials } from './core/config.js';
 import * as ai from './commands/ai/scan.js';
@@ -238,6 +241,50 @@ addOutput(program.command('users').description('用户列表').option('-f, --fil
 
 addOutput(program.command('drivers').description('驱动实例列表')).action(driver.driversList);
 addOutput(program.command('driver <id>').description('驱动实例详情')).action(driver.driverGet);
+
+addOutput(program.command('driver-catalog')
+  .description('驱动目录（可安装驱动列表，含已安装注记）')
+  .option('--search <keyword>', '关键词过滤（匹配 key/描述/分类）'))
+  .action(driverCatalog.driverCatalog);
+
+program.command('driver-create')
+  .description('创建驱动实例（-t 填驱动 key，即 driver-catalog 的 name 字段）')
+  .requiredOption('-n, --name <name>', '实例名称（唯一）')
+  .requiredOption('-t, --type <driverKey>', '驱动 key')
+  .option('--version <version>', '驱动版本（缺省从目录解析）')
+  .option('--run-mode <mode>', '运行模式: one | cluster | node', 'one')
+  .option('--distributed <mode>', '分配方式: all | average | lazy', 'all')
+  .option('-d, --description <text>', '描述')
+  .option('--file <path>', '完整 payload JSON 文件（与 flags 深合并）')
+  .option('--json <json>', '完整 payload JSON（与 flags 深合并）')
+  .action(driver.driverCreate);
+
+addOutput(program.command('driver-install <instanceId>')
+  .description('安装驱动（默认阻塞等待到完成，进度走 stderr）')
+  .option('--url <url>', '安装包地址（缺省从驱动目录解析）')
+  .option('--no-wait', '只触发安装，立即返回 taskId')
+  .option('--timeout <seconds>', '等待超时（秒）', '300')
+  .option('--interval <seconds>', '轮询间隔（秒）', '2'))
+  .action(driverInstall.driverInstall);
+
+addOutput(program.command('driver-install-info <taskId>')
+  .description('查询安装进度（--no-wait / 超时后续查用）'))
+  .action(driverInstall.driverInstallInfo);
+
+program.command('driver-update-config <instanceId>')
+  .description('更新驱动配置（device 块: settings/tags/commands/events，深合并）')
+  .option('--file <path>', '配置 JSON 文件')
+  .option('--json <json>', '配置 JSON 数据')
+  .action(driverUpdateConfig.driverUpdateConfig);
+
+addOutput(program.command('driver-restart <instanceId>')
+  .description('重启驱动（配置变更后生效），默认轮询 state 到 running')
+  .option('--no-wait', '不等待 running'))
+  .action(driver.driverRestart);
+
+program.command('driver-delete <instanceId>')
+  .description('删除驱动实例（会使其绑定的设备表失效）')
+  .action(driver.driverDelete);
 
 addOutput(program.command('driver-schema <driverType>')
   .description('获取驱动 schema（点位字段、settings 配置等）'))

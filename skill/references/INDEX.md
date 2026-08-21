@@ -9,6 +9,7 @@
 | 文件 | 主题 | 说明 |
 |------|------|------|
 | [device.md](device.md) | 设备管理 | 设备表核心：数据点、时序、远程控制、报警。区分设备表与普通表 |
+| [driver-create.md](driver-create.md) | 驱动创建与管理 | 驱动全生命周期命令：目录→创建→安装→配置→重启→验证→删除 |
 | [file.md](file.md) | 文件管理 | 文件/媒体上传管理，上传后按 ID 引用 |
 | [query-syntax.md](query-syntax.md) | 查询语法 | 统一 JSON 查询格式：filter、sort、limit、skip、操作符 |
 | [record.md](record.md) | 记录管理 | 表记录 CRUD（业务数据行） |
@@ -73,5 +74,6 @@
 | 创建设备表 | [../table-guides/device-table-guide.md](../table-guides/device-table-guide.md) |
 | 创建组织表 | [../table-guides/department-table-guide.md](../table-guides/department-table-guide.md) |
 | 查询数据 | [query-syntax.md](query-syntax.md) → [record.md](record.md) |
+| 接入新驱动 | [driver-create.md](driver-create.md) → [workflow-driver-create.md](workflow-driver-create.md) |
 | 报警配置 | [warning.md](warning.md) → [device-warning-rule.md](device-warning-rule.md) |
 | 文件上传 | [file.md](file.md) → [controls/upload.md](controls/upload.md) |

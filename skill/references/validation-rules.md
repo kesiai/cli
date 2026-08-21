@@ -29,6 +29,12 @@
 | 创建记录 | `$K record-create --data ...` | 记录数据校验 |
 | 修改记录 | `$K record-update --data ...` | 记录数据校验 |
 | 修改数据点 | 通过 API 修改 tags | 数据点校验 |
+| 创建驱动实例 | `$K driver-create -n ... -t ...` | 驱动创建校验（见下） |
+| 更新驱动配置 | `$K driver-update-config <id> --file ...` | 驱动配置校验（见下） |
+
+**驱动创建校验**：① `-t` 必须是驱动 key（`driver-catalog` 输出的 `name`），禁止填分类路径；② 实例名称全局唯一——重名时复用报错信息中的实例，禁止换名盲试；③ 创建成功记录返回 id，后续一律 PATCH 更新，禁止重复 POST。
+
+**驱动配置校验**：① 必须在 `driver-install` 完成后才能查 schema 并生成配置；② settings/tags/commands 的字段与 required 以 `$K driver-schema <驱动key>` 返回为准，禁止发明 schema 外字段；③ enum 字段必须取合法值。
 
 ---
 

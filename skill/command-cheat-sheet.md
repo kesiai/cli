@@ -130,6 +130,15 @@ $K records devices -f 'name~空调' -l 5        # 模糊搜索
 | `$K drivers` | 列出驱动实例 |
 | `$K driver <id>` | 驱动详情（含 device.settings 连接参数） |
 | `$K driver-schema <driverType>` | 驱动 schema（点位字段定义、枚举值） |
+| `$K driver-catalog [--search <kw>]` | 驱动目录（可安装列表，含已安装注记） |
+| `$K driver-create -n <名称> -t <驱动key>` | 创建驱动实例（名称唯一；-t 填目录 name 字段） |
+| `$K driver-install <instanceId>` | 安装驱动（默认阻塞等待到完成；--no-wait 只触发） |
+| `$K driver-install-info <taskId>` | 查询安装进度（--no-wait/超时续查） |
+| `$K driver-update-config <id> --file/--json` | 更新配置（device 块 settings/tags/commands/events） |
+| `$K driver-restart <id>` | 重启驱动（配置变更后生效），轮询到 running |
+| `$K driver-delete <id>` | 删除实例（绑定的设备表会失效，需用户确认） |
+
+> 自动创建驱动的流程编排见 [references/workflow-driver-create.md](references/workflow-driver-create.md)，命令细节见 [references/driver-create.md](references/driver-create.md)
 
 ---
 

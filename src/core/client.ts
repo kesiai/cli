@@ -454,6 +454,82 @@ export class KesiApiClient {
     return JSON.parse(jsonStr);
   }
 
+  // ==================== 驱动目录 / 实例管理 / 安装 ====================
+
+  /** 驱动目录（可安装驱动列表）。⚠️ 条目的 driverType 是分类路径，name 才是驱动 key */
+  async getDriverCatalog(params?: Record<string, any>): Promise<any[]> {
+    const query: Record<string, any> = {
+      sort: { order: 1 },
+      ...params,
+    };
+    const res = await this.http.get('/driver/driver', {
+      params: { query: JSON.stringify(query) },
+    });
+    return Array.isArray(res.data) ? res.data : (res.data?.list || []);
+  }
+
+  /**
+   * 创建驱动实例，返回实例 id
+   * ⚠️ 名称不可重复；创建成功后后续保存一律走 updateDriverInstance，禁止再次 POST（重名报错）
+   */
+  async createDriverInstance(data: {
+    name: string;
+    driverType: string;
+    driverVersion?: string;
+    runMode?: 'one' | 'cluster' | 'node';
+    distributed?: 'all' | 'average' | 'lazy';
+    disable?: boolean;
+    stopAcquisition?: boolean;
+    autoUpdateConfig?: boolean;
+    debug?: boolean;
+    description?: string;
+    state?: 'none';
+    ports?: string;
+    device?: { tags?: any[]; commands?: any[]; events?: any[]; settings?: Record<string, any> };
+  }): Promise<string | undefined> {
+    const res = await this.http.post('/driver/driverInstance', data);
+    return res.data?.InsertedID || res.data?.id;
+  }
+
+  /** 更新驱动实例（partialSave）。配置保存在 device 块：{settings, tags, commands, events} */
+  async updateDriverInstance(id: string, data: Record<string, any>): Promise<void> {
+    await this.http.patch(`/driver/driverInstance/${id}`, data);
+  }
+
+  /** 删除驱动实例 */
+  async deleteDriverInstance(id: string): Promise<void> {
+    await this.http.delete(`/driver/driverInstance/${id}`);
+  }
+
+  /** 触发驱动安装（body: {url, id: 驱动key, instanceId}），返回 taskId */
+  async installDriver(url: string, driverKey: string, instanceId: string): Promise<string | undefined> {
+    const res = await this.http.post('/driver/driver/install', { url, id: driverKey, instanceId });
+    return res.data?.id;
+  }
+
+  /** 安装进度：{download?, install?, run?}，各含 {progress, err, outInfo}。阶段完成后对应字段会从响应中消失 */
+  async getInstallInfo(taskId: string): Promise<any> {
+    const res = await this.http.get(`/driver/installInfo/${taskId}`);
+    return res.data || {};
+  }
+
+  /** 已运行驱动服务列表（安装完成后校验 Meta.serviceId === instanceId） */
+  async getDriverServiceList(): Promise<any[]> {
+    const res = await this.http.get('/driver/driver/serviceList');
+    return res.data || [];
+  }
+
+  /** 重启驱动（配置变更后生效）：POST /driver/driver/{groupId}/change/config（按 groupId 路由，非实例 id） */
+  async restartDriver(groupId: string): Promise<void> {
+    await this.http.post(`/driver/driver/${groupId}/change/config`);
+  }
+
+  /** 从实例列表读取 state（⚠️ 详情接口不返回 state 字段，只有列表 projection 带） */
+  async getDriverInstanceState(instanceId: string): Promise<string | undefined> {
+    const list = await this.getDriverInstances({ limit: 1000 });
+    return list.find((i: any) => i.id === instanceId || i._id === instanceId)?.state;
+  }
+
   // ==================== 通用 Resource 查询 ====================
 
   async queryResource(resource: string, params?: Record<string, any>): Promise<{ items: any[]; total: number }> {

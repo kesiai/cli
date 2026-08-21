@@ -166,6 +166,7 @@ $K describe <tableId>     # 某张表的字段级 schema
 |------|----------|------|
 | 数据操作模式 | [references/workflow-data-ops.md](references/workflow-data-ops.md) | 中台数据管理，完成后直接结束 |
 | 数据+前端模式 | [references/workflow-full.md](references/workflow-full.md) | 建表灌数据后交接 kesi-frontend |
+| 驱动创建（子工作流） | [references/workflow-driver-create.md](references/workflow-driver-create.md) | 接入新协议/厂商驱动：目录选型→创建→安装→配置→验证 running。可独立触发，也可由 workflow-full Phase 2 在无可用驱动时进入 |
 
 ---
 
@@ -200,6 +201,7 @@ $K describe <tableId>     # 某张表的字段级 schema
 | 表管理 | `$K tables`, `$K table-create`, `$K table-update` |
 | 记录管理 | `$K records`, `$K record-create`, `$K record-update` |
 | 设备/数据点 | `$K tags`, `$K drivers`, `$K driver-schema` |
+| 驱动创建 | `$K driver-catalog`, `$K driver-create`, `$K driver-install`, `$K driver-update-config`, `$K driver-restart` |
 | 报警 | `$K warnings`, `$K warning-rules` |
 
 ---
@@ -215,6 +217,7 @@ $K describe <tableId>     # 某张表的字段级 schema
 | [references/table-field-rules.md](references/table-field-rules.md) | 字段规则（交互规则+校验） |
 | [references/device.md](references/device.md) | 设备管理总览 |
 | [references/device-tag.md](references/device-tag.md) | 数据点详细 |
+| [references/driver-create.md](references/driver-create.md) | 驱动创建与管理命令参考 |
 | [references/validation-rules.md](references/validation-rules.md) | 校验规则 |
 
 ---
