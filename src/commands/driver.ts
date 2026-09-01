@@ -138,12 +138,12 @@ export async function driverRestart(id: string, options: any): Promise<void> {
   await executeCommand(async () => {
     const client = getApiClient();
 
-    // change/config 端点按 groupId 路由（真机验证：实例 id 报 400"未查到对应的驱动实例"，groupId 正常）
+    // change/config 端点只按 groupId 路由（真机验证：实例 id 报 400"未查到对应的驱动实例"）；没有 groupId 禁止重启
     const instance = await client.getDriverInstanceById(id);
     if (!instance) throw new Error(`驱动实例 '${id}' 不存在`);
-    const groupId: string = instance.groupId || id;
+    if (!instance.groupId) throw new Error(`驱动实例 '${id}' 缺少 groupId，无法重启`);
 
-    await client.restartDriver(groupId);
+    await client.restartDriver(instance.groupId);
 
     let state = '';
     if (options.wait !== false) {

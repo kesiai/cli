@@ -22295,8 +22295,8 @@ async function driverRestart(id, options) {
     const client = getApiClient();
     const instance = await client.getDriverInstanceById(id);
     if (!instance) throw new Error(`\u9A71\u52A8\u5B9E\u4F8B '${id}' \u4E0D\u5B58\u5728`);
-    const groupId = instance.groupId || id;
-    await client.restartDriver(groupId);
+    if (!instance.groupId) throw new Error(`\u9A71\u52A8\u5B9E\u4F8B '${id}' \u7F3A\u5C11 groupId\uFF0C\u65E0\u6CD5\u91CD\u542F`);
+    await client.restartDriver(instance.groupId);
     let state = "";
     if (options.wait !== false) {
       for (let i = 0; i < 30; i++) {
