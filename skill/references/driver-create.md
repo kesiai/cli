@@ -10,7 +10,7 @@
 | `$K driver-catalog [--search <kw>]` | **驱动目录**（平台可安装的驱动列表，含已安装注记） | ❌ |
 | `$K drivers` | **驱动实例**列表（已创建/已安装的） | ❌ |
 | `$K driver <id>` | 实例详情（含 `device.settings` 连接参数） | ❌ |
-| `$K driver-schema <driverType>` | 驱动 schema（settings/tags/commands/events 字段定义） | ❌ |
+| `$K driver-schema <driverType>` | 驱动 schema（driver/model/device 三块字段定义，决定配置放哪层） | ❌ |
 | `$K driver-create -n <名称> -t <驱动key>` | 创建驱动实例（集群节点加 `--run-mode node --cluster <集群实例id>`） | ✅ |
 | `$K driver-install <instanceId>` | 安装驱动（默认阻塞等待到完成） | ✅ |
 | `$K driver-install-info <taskId>` | 查询安装进度（`--no-wait`/超时后续查） | ❌ |
@@ -150,15 +150,29 @@ $K driver-schema modbus-tcp-driver
 
 ```json
 {
-  "model":  { "tags": {"required": [...], "fields": {...}}, "settings": {...} },
-  "device": { "tags": {"required": [...], "fields": {...}}, "settings": {...} },
-  "driver": { "settings": {...} }
+  "driver": { "settings": {...} },
+  "model":  { "tags": {"required": [...], "fields": {...}}, "settings": {...}, "commands": {...} },
+  "device": { "tags": {"required": [...], "fields": {...}}, "settings": {...}, "commands": {...} }
 }
 ```
 
+**⚠️ 三块的归属（平台语义，决定什么配置放哪一层）：**
+
+| 块 | 归属 | 说明 |
+|----|------|------|
+| `driver` | **驱动自身配置表单**——创建/配置驱动实例时填的 | UI 驱动配置页**只显示**这里定义的字段 |
+| `model` | **模型（设备表）的表单**——选完驱动建表/模型时要加的配置 | 建设备表时生效 |
+| `device` | **设备能拿到的配置**（设备层默认值） | 设备/表层面 |
+
 - **`device.settings`** → 驱动实例的连接配置（`driver-update-config` 的 settings 用这个）：`{字段名: {title, type, description, default?, enum?, options?}}` 扁平字段表
-- **`device.tags`** → 点位定义：`required` 字段名列表 + `fields` 字段表（enum 字段带 `options` 中文标签）
-- `model` 块用于设备表模型默认值；`driver` 块用于驱动级配置
+- **`model.tags` / `device.tags`** → 点位定义：`required` 字段名列表 + `fields` 字段表（enum 字段带 `options` 中文标签）。**点位属于模型/设备层，不属于驱动实例**
+
+**⚠️ 数据点（tags）能否配在驱动实例上：看 `driver` 块是否定义了 `tags`。**
+主流协议驱动（modbus / siemens-s7 等）的 `driver` 块**只有 settings、没有 tags**——驱动实例上没有数据点配置能力。此时任务要求"配数据点"的正确做法：
+
+1. 照常完成 创建 → 安装 → settings 配置 → 重启 → running
+2. **不要把点位写进驱动实例**（实例上的 `device.tags` 是设备层默认值，不会出现在驱动配置页，写了用户也看不见）
+3. **如实反馈**：「驱动已创建并启动；该驱动的配置没有数据点定义，未配置数据点——数据点属于模型/设备层，需要创建设备表时定义」
 
 **settings 填充规则（优先级从高到低）：**
 
@@ -169,19 +183,19 @@ $K driver-schema modbus-tcp-driver
 5. 其余 required 但无信息 → **问用户**
 6. **禁止发明 schema 之外的字段**；用户话里无处安放的事实要明示给用户
 
-**点位草案** = [device-tag.md](device-tag.md) 基础字段（`id`/`name`/`policy`/`unit` 等）+ schema `tags.items.properties` 驱动字段（`required` 全填）。用户未给点位清单时起草 2-3 个代表点位并**明示假设**。
+**点位草案**（**仅用于设备表/模型层**，见上表 `model.tags`）= [device-tag.md](device-tag.md) 基础字段（`id`/`name`/`policy`/`unit` 等）+ schema `tags.items.properties` 驱动字段（`required` 全填）。用户未给点位清单时起草 2-3 个代表点位并**明示假设**。
 
 ## 保存配置 + 重启 + 验证
 
 ```bash
 # device 块：{settings, tags, commands, events}，与现有配置深合并（数组整体替换）
 $K driver-update-config <instanceId> --file config.json
-# 示例 config.json：
-# { "settings": {"ip": "192.168.1.10", "port": 502},
-#   "tags": [{"id": "voltage", "name": "电压", "unit": "V", ...驱动字段}] }
+# 示例 config.json（纯驱动接入任务只写 settings）：
+# { "settings": {"ip": "192.168.1.10", "port": 502} }
+# tags 仅在 schema driver 块定义了 tags、或任务明确要求设备层默认值时才写
 
 $K driver-restart <instanceId>        # 配置变更后重启生效（内部按 groupId 路由），轮询 state 到 running
-$K driver <instanceId>                # 验证 device.tags 已持久化；state 在 $K drivers 列表中查
+$K driver <instanceId>                # 验证 device.settings 已持久化；state 在 $K drivers 列表中查
 ```
 
 **实例 state 枚举**：

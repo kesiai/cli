@@ -21229,7 +21229,8 @@ Content-Type: ${mime}\r
     const raw = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
     const trimmed = raw.trim();
     const jsonStr = trimmed.startsWith("(") && trimmed.endsWith(")") ? trimmed.slice(1, -1) : trimmed;
-    return JSON.parse(jsonStr);
+    const normalized = jsonStr.replace(/([[,:]\s*)0x[0-9A-Fa-f]+/g, (m, p) => p + parseInt(m.slice(p.length), 16));
+    return JSON.parse(normalized);
   }
   // ==================== 驱动目录 / 实例管理 / 安装 ====================
   /** 驱动目录（可安装驱动列表）。⚠️ 条目的 driverType 是分类路径，name 才是驱动 key */

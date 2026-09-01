@@ -468,10 +468,12 @@ export class KesiApiClient {
   async getDriverSchema(driverType: string): Promise<any> {
     const res = await this.http.get(`/driver/driver/${driverType}/schema`);
     const raw = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-    // 后端可能返回 (...) 包裹的 JSON
+    // 后端可能返回 (...) 包裹 + 十六进制字面量（如 siemens-s7 的 enum: [0x04,...]），均非严格 JSON
     const trimmed = raw.trim();
     const jsonStr = (trimmed.startsWith('(') && trimmed.endsWith(')')) ? trimmed.slice(1, -1) : trimmed;
-    return JSON.parse(jsonStr);
+    // 只转换数字位（[ , : 之后）的 0x 字面量，避免误伤字符串值里的 "0x84" 文字说明
+    const normalized = jsonStr.replace(/([[,:]\s*)0x[0-9A-Fa-f]+/g, (m, p) => p + parseInt(m.slice(p.length), 16));
+    return JSON.parse(normalized);
   }
 
   // ==================== 驱动目录 / 实例管理 / 安装 ====================
