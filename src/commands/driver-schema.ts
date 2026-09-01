@@ -57,6 +57,8 @@ export async function driverSchema(driverType: string, options: any): Promise<vo
       // settings 字段
       if (s.properties.settings) {
         const settingsProps = s.properties.settings.properties;
+        // required 在 settings 对象级（properties.settings.required），逐字段打标——丢了它 agent 就不知道哪些必填
+        const reqList: string[] = s.properties.settings.required || [];
         if (settingsProps) {
           const settingsInfo: Record<string, any> = {};
           for (const [key, value] of Object.entries(settingsProps)) {
@@ -64,7 +66,9 @@ export async function driverSchema(driverType: string, options: any): Promise<vo
             settingsInfo[key] = {
               title: prop.title || key,
               type: prop.type || '',
+              required: reqList.includes(key),
             };
+            if (prop.default !== undefined) settingsInfo[key].default = prop.default;
             if (prop.description) settingsInfo[key].description = prop.description;
           }
           sectionResult.settings = settingsInfo;

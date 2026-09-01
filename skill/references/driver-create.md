@@ -174,14 +174,17 @@ $K driver-schema modbus-tcp-driver
 2. **不要把点位写进驱动实例**（实例上的 `device.tags` 是设备层默认值，不会出现在驱动配置页，写了用户也看不见）
 3. **如实反馈**：「驱动已创建并启动；该驱动的配置没有数据点定义，未配置数据点——数据点属于模型/设备层，需要创建设备表时定义」
 
+⚠️ **「任务要求定义/配置/新增数据点」不构成写实例 tags 的理由**。任务里出现"配数据点"字样 ≠ 任务要求"设备层默认值"——前者应按上面 3 步如实处理，后者仅指任务原文明说"为设备预置默认点位"的罕见场景。不要用"任务明确要求数据点"来解释写 tags 的行为。
+
 **settings 填充规则（优先级从高到低）：**
 
-1. schema `required` 字段必须全填
+1. schema `required` 字段必须全填（`driver-schema` 输出的 settings 字段带 `required: true` 标记）——**required 留空 = 配置不完整，禁止**
 2. 用户话中的事实按 `title`/`description` 映射到字段（"网关 192.168.1.10:502" → `ip/host=192.168.1.10`, `port=502`）
 3. `enum` 字段必须取合法值（按 `enum_title`/`title` 匹配，匹配不上问用户）
 4. schema 有 `default` 且用户未提 → 用 default
-5. 其余 required 但无信息 → **问用户**
-6. **禁止发明 schema 之外的字段**；用户话里无处安放的事实要明示给用户
+5. 任务说"用默认值"但字段 required 且无 default → **用行业通用默认填上并在报告注明假设**（如 S7 的 `localTsap=0100`/`remoteTsap=0200`、modbus 的 `port=502`），不要留空
+6. 其余非 required 且无信息 → 不写（不要发明值）
+7. **禁止发明 schema 之外的字段**；用户话里无处安放的事实要明示给用户
 
 **点位草案**（**仅用于设备表/模型层**，见上表 `model.tags`）= [device-tag.md](device-tag.md) 基础字段（`id`/`name`/`policy`/`unit` 等）+ schema `tags.items.properties` 驱动字段（`required` 全填）。用户未给点位清单时起草 2-3 个代表点位并**明示假设**。
 
@@ -190,9 +193,9 @@ $K driver-schema modbus-tcp-driver
 ```bash
 # device 块：{settings, tags, commands, events}，与现有配置深合并（数组整体替换）
 $K driver-update-config <instanceId> --file config.json
-# 示例 config.json（纯驱动接入任务只写 settings）：
+# 示例 config.json（驱动接入任务只写 settings）：
 # { "settings": {"ip": "192.168.1.10", "port": 502} }
-# tags 仅在 schema driver 块定义了 tags、或任务明确要求设备层默认值时才写
+# tags 只在 schema driver 块定义了 tags 时才写（极罕见）；「任务要求配数据点」不构成写 tags 的理由（见上方决策规则）
 
 $K driver-restart <instanceId>        # 配置变更后重启生效（内部按 groupId 路由），轮询 state 到 running
 $K driver <instanceId>                # 验证 device.settings 已持久化；state 在 $K drivers 列表中查

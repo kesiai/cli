@@ -22363,14 +22363,17 @@ async function driverSchema(driverType, options) {
       }
       if (s.properties.settings) {
         const settingsProps = s.properties.settings.properties;
+        const reqList = s.properties.settings.required || [];
         if (settingsProps) {
           const settingsInfo = {};
           for (const [key, value] of Object.entries(settingsProps)) {
             const prop = value;
             settingsInfo[key] = {
               title: prop.title || key,
-              type: prop.type || ""
+              type: prop.type || "",
+              required: reqList.includes(key)
             };
+            if (prop.default !== void 0) settingsInfo[key].default = prop.default;
             if (prop.description) settingsInfo[key].description = prop.description;
           }
           sectionResult.settings = settingsInfo;

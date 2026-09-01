@@ -113,7 +113,12 @@ $K driver-schema <驱动key>
 
 用户话中无处安放的事实（如提到了 schema 里没有的参数）→ **明示给用户**，不猜。
 
-### 3. 生成点位/指令草案
+### 3. 生成点位/指令草案（⚠️ 先过门控）
+
+**门控：点位能否配在驱动实例 = schema `driver` 块是否定义了 `tags`。**
+主流协议驱动（modbus / siemens-s7 等）`driver` 块只有 settings——**跳过点位草案，不写实例 tags**。任务要求"定义/配置/新增数据点"时在最终报告如实说明：「驱动配置没有数据点定义，未配置数据点；数据点属于模型/设备层，建设备表时定义」。**不要以"任务要求数据点"为由把 tags 写进实例**（详见 [driver-create.md](driver-create.md#驱动-schema-与配置生成) 三块归属表）。
+
+只有 `driver` 块定义了 tags（极罕见）才继续：
 
 - 点位 = [device-tag.md](device-tag.md) 基础字段（`id`/`name`/`policy`/`unit` 等）+ schema `tags.items` 驱动字段（`required` 全填、enum 取合法值）
 - 用户给了点位清单 → 按清单生成；**没给 → 起草 2-3 个代表点位并明示假设**（地址/从站号等按序分配），用户可改
@@ -131,10 +136,10 @@ $K driver-schema <驱动key>
 # 临时文件放系统临时目录（mktemp），用完删除，不在 skill 目录留文件
 $K driver-update-config <instanceId> --file <tmpfile>
 $K driver-restart <instanceId>
-$K driver <instanceId>                # 验证 state=running 且 device.tags 已持久化
+$K driver <instanceId>                # 验证 state=running 且 device.settings 已持久化
 ```
 
-**最终报告**：instanceId、名称、驱动 key、版本、state、点位/指令数量、settings 摘要。
+**最终报告**：instanceId、名称、驱动 key、版本、state、settings 摘要、点位/指令数量（驱动无点位配置能力时如实说明"未配置数据点"及原因）。
 
 失败处理：state 卡 `none`/`stop` → 再 `driver-restart` 一次；仍失败 → 带 serviceList 证据如实上报，建议人工排查。
 
