@@ -81,3 +81,26 @@ export async function recordsBatchDelete(tableName: string, ids: string[]): Prom
     console.log(formatSuccess(`已删除 ${ids.length} 条记录`));
   });
 }
+
+/**
+ * 修改记录标识（⚠️ 等同删除重建的特殊操作）
+ * 后端实测只读 body.id（其余字段忽略、原数据保留），引用方（relate/时序/_settings）不迁移；
+ * 普通 record-update 改不了 id（PATCH 的 body.id 不生效）。需同时改字段时先 record-update 再本命令。
+ */
+export async function recordChangeId(tableName: string, oldId: string, newId: string): Promise<void> {
+  await executeCommand(async () => {
+    const client = getApiClient();
+
+    // 1️⃣ 取全量原始记录做基底（未传字段不会被清掉）
+    const original = await client.getTableRecordById(tableName, oldId);
+    if (!original) {
+      throw new Error(`记录不存在: ${tableName}/${oldId}`);
+    }
+
+    // 2️⃣ 覆盖 id 后走专用 change 接口
+    await client.changeTableRecordId(tableName, oldId, { ...original, id: newId });
+
+    console.log(formatSuccess(`记录标识已修改: ${oldId} → ${newId}`));
+    console.log('⚠️  修改标识后本条数据保留，但其它数据对该记录的引用（关联字段、时序数据、_settings 扩展配置等）不会自动迁移，且操作不可恢复。');
+  });
+}

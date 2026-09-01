@@ -131,6 +131,16 @@ export class KesiApiClient {
     await this.http.patch(`/core/t/schema/${id}`, data);
   }
 
+  /**
+   * 修改表标识（⚠️ 等同删除重建的特殊操作）：PATCH /core/t/schema/change/{旧id}，新 id 在 body.id
+   * 实测后端只读 body.id（其余字段忽略、表配置保留），但表下记录不迁移（将无法访问）；
+   * 普通 update 改不了 id（PATCH 的 body.id 不生效，对不存在的 id 静默无效）。
+   * 需同时改其他字段时：先 updateTable 再本方法。
+   */
+  async changeTableId(oldId: string, data: any): Promise<void> {
+    await this.http.patch(`/core/t/schema/change/${oldId}`, data);
+  }
+
   async deleteTable(id: string): Promise<void> {
     await this.http.delete(`/core/t/schema/${id}`);
   }
@@ -170,6 +180,16 @@ export class KesiApiClient {
 
   async updateTableRecord(tableName: string, id: string, data: any): Promise<void> {
     await this.http.patch(`/core/t/${tableName}/d/${id}`, data);
+  }
+
+  /**
+   * 修改记录标识（⚠️ 等同删除重建的特殊操作）：PATCH /core/t/{table}/d/change/{旧id}，新 id 在 body.id
+   * 实测后端只读 body.id（其余字段忽略、原数据保留），引用方（relate/时序数据/_settings 扩展）不迁移；
+   * 普通 update 改不了 id（PATCH 的 body.id 不生效，对不存在的 id 静默无效）。
+   * 需同时改其他字段时：先 updateTableRecord 再本方法。
+   */
+  async changeTableRecordId(tableName: string, oldId: string, data: any): Promise<void> {
+    await this.http.patch(`/core/t/${tableName}/d/change/${oldId}`, data);
   }
 
   async deleteTableRecord(tableName: string, id: string, attachment = false): Promise<void> {
@@ -477,6 +497,8 @@ export class KesiApiClient {
     driverType: string;
     driverVersion?: string;
     runMode?: 'one' | 'cluster' | 'node';
+    /** 集群组ID：仅 runMode='node' 时传递（= 所选集群实例的 groupId）；其余模式由后端生成，不传 */
+    groupId?: string;
     distributed?: 'all' | 'average' | 'lazy';
     disable?: boolean;
     stopAcquisition?: boolean;

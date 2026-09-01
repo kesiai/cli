@@ -33,31 +33,21 @@ $K table-update <id> --file schema.json
 $K table-update <id> --json '{"title":"新标题"}'
 ```
 
-⚠️ **`table-update` 是完全替换操作，不是合并**
+`table-update` 为**深合并更新**：先读取原始表配置（GET），与传入数据 deepMerge 后再提交，未传入字段保持原值。嵌套配置块（`device`、`schema`、`warning` 等）同样按字段深合并，不会整块替换。
 
-**规则：**
-- 传入的字段会**完全覆盖**对应的整个配置块
-- 未传入的字段**保持原值不变**
-
-**常见的错误示例：**
-
-| 错误操作 | 后果 |
-|---------|------|
-| 只传 `{"device": {"tags": [...]}}` | `device` 下的 `driver`、`settings` 等被清空 |
-| 只传 `{"schema": {"properties": {...}}}` | `schema` 下的 `formSchema`、`tableSchema` 等被清空 |
-| 只传 `{"warning": {"rules": [...]}}` | `warning` 下的其他配置丢失 |
-
-**正确做法：**
+### 修改表标识
 
 ```bash
-# 1. 先获取完整配置
-$K table <id> > full-config.json
-
-# 2. 编辑 full-config.json，修改目标字段
-
-# 3. 用完整配置更新
-$K table-update <id> --file full-config.json
+$K table-change-id <oldId> <newId>
 ```
+
+内部行为：GET 全量表配置 → 覆盖 `id` 为新值 → `PATCH /core/t/schema/change/{旧id}`（新 id 在 `body.id`）。
+
+⚠️ **特殊操作，专用命令**
+- 后端实测（103 环境）：change 只读 `body.id`，其余字段被忽略、表配置保留
+- **表下所有记录不会迁移（将无法访问）**，其它数据对该表的引用（relate 关联、settable 配置、报表/大屏引用等）也不会自动迁移，不可恢复
+- **`table-update` 改不了 id**：PATCH 的 body.id 不生效；PATCH 到不存在的 id 是静默无效（200 但不落库）
+- 需同时修改其他字段时：先 `table-update` 再 `table-change-id`
 
 ### 删除表
 

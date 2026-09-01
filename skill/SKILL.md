@@ -198,8 +198,8 @@ $K describe <tableId>     # 某张表的字段级 schema
 
 | 领域 | 常用命令 |
 |------|----------|
-| 表管理 | `$K tables`, `$K table-create`, `$K table-update` |
-| 记录管理 | `$K records`, `$K record-create`, `$K record-update` |
+| 表管理 | `$K tables`, `$K table-create`, `$K table-update`, `$K table-change-id`（⚠️ 删除重建语义） |
+| 记录管理 | `$K records`, `$K record-create`, `$K record-update`, `$K record-change-id`（⚠️ 删除重建语义） |
 | 设备/数据点 | `$K tags`, `$K drivers`, `$K driver-schema` |
 | 驱动创建 | `$K driver-catalog`, `$K driver-create`, `$K driver-install`, `$K driver-update-config`, `$K driver-restart` |
 | 报警 | `$K warnings`, `$K warning-rules` |

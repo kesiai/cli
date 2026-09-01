@@ -74,6 +74,11 @@ program
   .option('--json <json>', 'JSON 数据')
   .action(table.tableUpdate);
 
+program
+  .command('table-change-id <oldId> <newId>')
+  .description('修改表标识（⚠️ 删除重建语义，引用不自动迁移，不可恢复）')
+  .action(table.tableChangeId);
+
 program.command('table-delete <id>').description('删除表').action(table.tableDelete);
 
 // ==================== 记录管理 ====================
@@ -110,6 +115,11 @@ program
   .option('--json <json>', 'JSON 数据')
   .option('--data <json>', 'JSON 数据（别名）')
   .action(record.recordUpdate);
+
+program
+  .command('record-change-id <table> <oldId> <newId>')
+  .description('修改记录标识（⚠️ 删除重建语义，引用不自动迁移，不可恢复）')
+  .action(record.recordChangeId);
 
 program
   .command('record-delete <table> <id>')
@@ -250,9 +260,10 @@ addOutput(program.command('driver-catalog')
 program.command('driver-create')
   .description('创建驱动实例（-t 填驱动 key，即 driver-catalog 的 name 字段）')
   .requiredOption('-n, --name <name>', '实例名称（唯一）')
-  .requiredOption('-t, --type <driverKey>', '驱动 key')
+  .option('-t, --type <driverKey>', '驱动 key（--run-mode node 可省略，自动继承 --cluster 集群的驱动类型）')
   .option('--version <version>', '驱动版本（缺省从目录解析）')
   .option('--run-mode <mode>', '运行模式: one | cluster | node', 'one')
+  .option('--cluster <clusterInstanceId>', '集群实例 id（仅 --run-mode node 时必填：继承其 driverType，并把其 groupId 存上）')
   .option('--distributed <mode>', '分配方式: all | average | lazy', 'all')
   .option('-d, --description <text>', '描述')
   .option('--file <path>', '完整 payload JSON 文件（与 flags 深合并）')

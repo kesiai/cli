@@ -46,6 +46,22 @@ $K record-update <table> <id> --json '{"status":"stopped"}'
 $K record-update <table> <id> --data status=stopped
 ```
 
+`record-update` 为深合并更新：先读取原始记录，与传入数据 deepMerge 后再提交，未传入字段保持原值。
+
+### 修改记录标识
+
+```bash
+$K record-change-id <table> <oldId> <newId>
+```
+
+内部行为：GET 全量原始记录 → 覆盖 `id` 为新值 → `PATCH /core/t/{table}/d/change/{旧id}`（新 id 在 `body.id`）。
+
+⚠️ **特殊操作，专用命令**
+- 后端实测（103 环境）：change 只读 `body.id`，其余字段被忽略、本条数据保留（含 creator/createTime）
+- 其它数据对该记录的引用（relate 关联字段、时序数据、`_settings` 设备扩展配置等）**不会自动迁移**，不可恢复
+- **`record-update` 改不了 id**：PATCH 的 body.id 不生效；PATCH 到不存在的 id 是静默无效（200 但不落库）
+- 需同时修改其他字段时：先 `record-update` 再 `record-change-id`
+
 ### 删除记录
 
 ```bash

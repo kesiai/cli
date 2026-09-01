@@ -29,7 +29,8 @@ $K sample <tableId>            # 预览某张表的数据
 $K records <table> [-f filter] [-l limit] [--with-count]   # 查询列表
 $K record  <table> <id>                                     # 查单条
 $K record-create <table> --data k=v ...                     # 新增（支持 --json / --file / --upsert）
-$K record-update <table> <id> --data k=v                    # (⚠️ 是完全替换操作，不是合并)
+$K record-update <table> <id> --data k=v                    # 修改（深合并，未传字段保持原值）
+$K record-change-id <table> <oldId> <newId>                 # 改记录标识（⚠️ 引用不迁移；record-update 改不了 id，同改字段需先 record-update）
 $K record-delete <table> <id>                               # 删除
 $K records-batch-delete <table> <id1> <id2>                 # 批量删除
 ```
@@ -38,7 +39,8 @@ $K records-batch-delete <table> <id1> <id2>                 # 批量删除
 
 ```bash
 $K table-create --file schema.json      # 建表（⚠️ 必须遵循 template+function 映射）
-$K table-update <id> --file schema.json # 改表 (⚠️ 是完全替换操作，不是合并)
+$K table-update <id> --file schema.json # 改表（深合并，未传字段保持原值）
+$K table-change-id <oldId> <newId>      # 改表标识（⚠️ 表下记录将无法访问；table-update 改不了 id）
 $K table-delete <id>                    # 删表（⚠️ 连带删除全部记录，不可恢复）
 ```
 

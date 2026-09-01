@@ -25,6 +25,7 @@
 |------|------|----------|
 | 创建表 | `$K table-create --file schema.json` | 表结构校验 |
 | 修改表 | `$K table-update <id> --file schema.json` | 表结构校验 |
+| 修改表标识 | `$K table-change-id <oldId> <newId>` | 表结构校验（⚠️ 删除重建语义） |
 | 批量建表 | `$K seed --file seed.json` | seed 校验 |
 | 创建记录 | `$K record-create --data ...` | 记录数据校验 |
 | 修改记录 | `$K record-update --data ...` | 记录数据校验 |
@@ -244,12 +245,8 @@ function validateSelectField(key, field) {
 ```json
 {
   "device": {
-    "driver": "必填，驱动类型",
-    "driverType": "必填，驱动类型（与 driver 相同）",
-    "driverName": "必填，驱动名称",
-    "driverExampleId": "必填，驱动实例 ID",
-    "groupId": "必填，驱动实例 ID（与 driverExampleId 相同）",
-    "driverGroupId": "必填，格式：{driverType}_$$_{id}",
+    "driver": "必填，驱动类型（= 驱动实例的 driverType）",
+    "groupId": "必填，集群组 ID（= 驱动实例的 groupId 字段）",
     "emulator": "必填，布尔值",
     "settings": "必填，对象类型，驱动连接参数",
     "tags": "必填，数组类型，数据点列表",
@@ -259,35 +256,28 @@ function validateSelectField(key, field) {
 }
 ```
 
+⚠️ `driverType`/`driverName`/`driverExampleId`/`driverGroupId` 为已废弃的冗余字段，校验时若出现应报错并要求删除（device 块驱动关联字段只允许 `driver` 和 `groupId`）。
+
 ### 2.2 驱动字段映射校验
 
 ```javascript
 // 驱动字段必须来自 $K drivers 和 $K driver 的返回值
 function validateDriverFields(device, driverInfo) {
-  // driver 和 driverType 必须相同
-  if (device.driver !== device.driverType) {
-    throw `device.driver="${device.driver}" 与 device.driverType="${device.driverType}" 必须相同`
+  // 禁止废弃字段
+  for (const legacy of ['driverType', 'driverName', 'driverExampleId', 'driverGroupId']) {
+    if (device[legacy] !== undefined) {
+      throw `device.${legacy} 是已废弃字段，请删除（驱动关联字段只有 driver 和 groupId）`
+    }
   }
 
-  // driverName 必须来自驱动实例的 name
-  if (device.driverName !== driverInfo.name) {
-    throw `device.driverName="${device.driverName}" 与驱动实例 name="${driverInfo.name}" 不一致`
+  // driver 必须来自驱动实例的 driverType
+  if (device.driver !== driverInfo.driverType) {
+    throw `device.driver="${device.driver}" 与驱动实例 driverType="${driverInfo.driverType}" 不一致`
   }
 
-  // driverExampleId 必须来自驱动实例的 id
-  if (device.driverExampleId !== driverInfo.id) {
-    throw `device.driverExampleId="${device.driverExampleId}" 与驱动实例 id="${driverInfo.id}" 不一致`
-  }
-
-  // groupId 必须与 driverExampleId 相同
-  if (device.groupId !== device.driverExampleId) {
-    throw `device.groupId="${device.groupId}" 必须与 driverExampleId="${device.driverExampleId}" 相同`
-  }
-
-  // driverGroupId 格式校验
-  const expected = `${device.driverType}_$$_${device.driverExampleId}`
-  if (device.driverGroupId !== expected) {
-    throw `device.driverGroupId="${device.driverGroupId}" 格式错误，应为 "${expected}"`
+  // groupId 必须来自驱动实例的 groupId 字段
+  if (device.groupId !== driverInfo.groupId) {
+    throw `device.groupId="${device.groupId}" 与驱动实例 groupId="${driverInfo.groupId}" 不一致`
   }
 
   return true
@@ -299,14 +289,10 @@ function validateDriverFields(device, driverInfo) {
 ```javascript
 // 测试驱动必须使用固定配置
 function validateTestDriver(device) {
-  if (device.driver === 'test' || device.driverType === '测试驱动') {
+  if (device.driver === 'test') {
     const TEST_DRIVER_CONFIG = {
       driver: 'test',
-      driverType: '测试驱动',
-      driverName: '测试驱动',
-      driverExampleId: 'test',
       groupId: 'test',
-      driverGroupId: 'test_$$_test',
       emulator: false,
       settings: {}
     }
@@ -471,8 +457,8 @@ function validateSeedItem(item) {
       "severity": "error"
     },
     {
-      "field": "device.driverGroupId",
-      "message": "格式错误，应为 'modbus_$$_abc123'",
+      "field": "device.driverExampleId",
+      "message": "已废弃字段，请删除（驱动关联字段只有 driver 和 groupId）",
       "severity": "error"
     }
   ],
@@ -503,7 +489,7 @@ function validateSeedItem(item) {
 | `设备表缺少预设字段` | 缺少 id/name/online 等字段 | 补充 7 个预设字段 |
 | `formSchema colSpan 之和未填满` | 某行 colSum < cols | 调整 colSpan 使每行填满 |
 | `控件必须独占整行` | rich-text 的 colSpan ≠ cols | 将 colSpan 设为 cols |
-| `device.driverGroupId 格式错误` | 格式不符合要求 | 按 `{driverType}_$$_{id}` 格式生成 |
+| `device 含废弃驱动字段` | 写入了 driverType/driverName/driverExampleId/driverGroupId | 删除废弃字段，驱动关联只保留 `driver`（=实例 driverType）+ `groupId`（=实例 groupId） |
 | `点位缺少必填驱动字段` | 未调用 `$K driver-schema` | 先查询驱动 schema，再填写点位 |
 | `测试驱动配置错误` | 未使用固定配置 | 使用测试驱动固定配置 |
 

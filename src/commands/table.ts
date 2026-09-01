@@ -96,3 +96,36 @@ export async function tableDelete(id: string): Promise<void> {
     console.log(formatSuccess('删除成功'));
   });
 }
+
+/**
+ * 修改表标识（⚠️ 等同删除重建的特殊操作）
+ * 后端实测只读 body.id（其余字段忽略、表配置保留），但表下记录不迁移（将无法访问）；
+ * 普通 table-update 改不了 id（PATCH 的 body.id 不生效）。需同时改字段时先 table-update 再本命令。
+ */
+export async function tableChangeId(oldId: string, newId: string): Promise<void> {
+  await executeCommand(async () => {
+    const client = getApiClient();
+
+    // 1️⃣ 取全量原始表配置做基底（未传字段不会被清掉）
+    const original = await client.getTableById(oldId);
+    if (!original) {
+      throw new Error(`表不存在: ${oldId}`);
+    }
+
+    // 2️⃣ 覆盖 id，先按 table-update 同样口径校验合并后的完整数据
+    const merged = { ...original, id: newId };
+    const validationResult = validateTableFields(merged);
+    const format = 'text';
+    console.log(formatValidationResult(validationResult, format));
+
+    if (!validationResult.valid) {
+      throw new Error('字段验证失败，请修复后重试');
+    }
+
+    // 3️⃣ 走专用 change 接口
+    await client.changeTableId(oldId, merged);
+
+    console.log(formatSuccess(`表标识已修改: ${oldId} → ${newId}`));
+    console.log('⚠️  修改标识后表配置保留，但表下所有记录不会迁移（将无法访问）；其它数据对该表的引用（relate 关联、settable 配置、报表/大屏引用等）也不会自动迁移，且操作不可恢复。');
+  });
+}

@@ -67,7 +67,8 @@ $K tables --base-url http://<平台>/rest --project-id <projectId> --token <toke
 | `$K tables` | 列出所有表 |
 | `$K table <id>` | 查看表详情（schema） |
 | `$K table-create --file schema.json` | 创建表 |
-| `$K table-update <id> --file schema.json` | 修改表（⚠️ 完全替换，非合并） |
+| `$K table-update <id> --file schema.json` | 修改表（深合并，未传字段保持原值） |
+| `$K table-change-id <oldId> <newId>` | 修改表标识（⚠️ 表下记录将无法访问，引用不迁移，不可恢复） |
 | `$K table-delete <id>` | 删除表（⚠️ 连带删除所有记录，不可恢复） |
 
 ---
@@ -79,7 +80,8 @@ $K tables --base-url http://<平台>/rest --project-id <projectId> --token <toke
 | `$K records <table> [-f filter] [-l limit] [--with-count]` | 查询列表 |
 | `$K record <table> <id>` | 查单条 |
 | `$K record-create <table> --data k=v ...` | 新增（支持 --json / --file / --upsert） |
-| `$K record-update <table> <id> --data k=v` | 修改（⚠️ 完全替换，非合并） |
+| `$K record-update <table> <id> --data k=v` | 修改（深合并，未传字段保持原值） |
+| `$K record-change-id <table> <oldId> <newId>` | 修改记录标识（⚠️ 引用/时序不迁移，不可恢复） |
 | `$K record-delete <table> <id>` | 删除 |
 | `$K records-batch-delete <table> <id1> <id2>` | 批量删除 |
 
@@ -131,7 +133,7 @@ $K records devices -f 'name~空调' -l 5        # 模糊搜索
 | `$K driver <id>` | 驱动详情（含 device.settings 连接参数） |
 | `$K driver-schema <driverType>` | 驱动 schema（点位字段定义、枚举值） |
 | `$K driver-catalog [--search <kw>]` | 驱动目录（可安装列表，含已安装注记） |
-| `$K driver-create -n <名称> -t <驱动key>` | 创建驱动实例（名称唯一；-t 填目录 name 字段） |
+| `$K driver-create -n <名称> -t <驱动key>` | 创建驱动实例（名称唯一；-t 必须是 driver-catalog 目录内的 key，目录外禁止创建；集群节点：`--run-mode node --cluster <集群实例id>` 继承其驱动类型与 groupId） |
 | `$K driver-install <instanceId>` | 安装驱动（默认阻塞等待到完成；--no-wait 只触发） |
 | `$K driver-install-info <taskId>` | 查询安装进度（--no-wait/超时续查） |
 | `$K driver-update-config <id> --file/--json` | 更新配置（device 块 settings/tags/commands/events） |
