@@ -209,19 +209,11 @@ export interface DeviceEvent {
 /** 设备完整配置（表顶级 device 字段） */
 export interface ModelDeviceConfig {
   devicePlugin?: boolean;
-  /** 驱动标识 */
+  /** 驱动类型（= 驱动实例的 driverType）。驱动关联字段只有 driver + groupId，其余已废弃 */
   driver?: string;
-  /** 驱动实例ID */
-  driverExampleId?: string;
-  /** 驱动组ID（组合键: "{driverType}_$$_{groupId}"） */
-  driverGroupId?: string;
-  /** 驱动名称 */
-  driverName?: string;
-  /** 驱动类型（如 'modbus', 'opcua'）= 驱动实例的 driverType */
-  driverType?: string;
   /** 是否仿真 */
   emulator?: boolean;
-  /** 组ID */
+  /** 集群组ID（= 驱动实例的 groupId 字段） */
   groupId?: string;
   /** 未启用的标签ID列表 */
   notEnabledTags?: string[];

@@ -48,9 +48,9 @@ $K driver-catalog --search <关键词>
 
 - 唯一合理匹配 → 直接推荐，用户确认
 - 多个合理候选 → 列 top 3 让用户选
-- 零匹配 → 换关键词重试一次；仍无 → **如实告知**"平台目录没有该驱动"，不硬造
+- 零匹配 → 换关键词重试一次；仍无 → **如实告知**"平台目录没有该驱动"，**禁止调用 `driver-create`**（目录外驱动平台无法安装运行，CLI 也会直接拒绝），可列相近候选，由用户决定换驱动或联系管理员上架
 
-⚠️ **确认门 1**：向用户确认「驱动 key + 实例名称 + 版本」后才进入 Phase 2。
+⚠️ **确认门 1**：向用户确认「驱动 key + 实例名称 + 版本」后才进入 Phase 2。确认的驱动 key 必须来自目录输出。
 
 ---
 
@@ -62,6 +62,13 @@ $K driver-catalog --search <关键词>
 { "name": "Modbus TCP 驱动-01", "driverType": "modbus-tcp-driver", "runMode": "one", "distributed": "all" }
 ```
 
+**集群节点例外**（用户要求把驱动挂到某集群下时）：payload 增加 `runMode: "node"` + `groupId`（= 所选集群实例的 groupId），`driverType` 与集群相同。创建命令用 `--cluster`，CLI 自动校验集群并继承 driverType + groupId（见 [driver-create.md](driver-create.md#集群节点创建)）：
+
+```bash
+$K drivers                                  # 找 runMode=cluster 的集群实例
+$K driver-create -n "<节点名称>" --run-mode node --cluster <集群实例id>
+```
+
 ### 2. 创建
 
 ```bash
@@ -70,7 +77,8 @@ $K driver-create -n "<名称>" -t <驱动key>
 
 **必须记录返回的 `id`**（instanceId），后续所有步骤用它。
 
-⚠️ 重名报错时**复用报错信息中的实例 ID**，禁止换名盲试、禁止重复创建。
+⚠️ `-t` 只能填 Phase 1 目录匹配确认的驱动 key；目录外驱动 CLI 直接拒绝创建（`平台驱动目录中没有 "xxx"，禁止创建`）。
+重名报错时**复用报错信息中的实例 ID**，禁止换名盲试、禁止重复创建。
 
 ### 3. 安装（阻塞等待）
 
@@ -136,5 +144,5 @@ $K driver <instanceId>                # 验证 state=running 且 device.tags 已
 
 | 来源 | 回接动作 |
 |------|----------|
-| workflow-full Phase 2（无可用驱动进入） | 带新实例回到主工作流继续表规划，按 [device.md](device.md#驱动字段映射) 填设备表驱动字段：`driverExampleId`/`groupId` = 实例 id，`driverGroupId` = `{driverType}_$$_{id}` |
+| workflow-full Phase 2（无可用驱动进入） | 带新实例回到主工作流继续表规划，按 [device.md](device.md#驱动字段映射) 填设备表驱动字段：`driver` = 实例的 `driverType`，`groupId` = 实例的 `groupId` 字段（仅此两个驱动关联字段，其余废弃） |
 | 用户直接要求创建驱动 | 按 [workflow-data-ops.md](workflow-data-ops.md) 的收尾方式汇报后结束（不主动引导生成前端） |

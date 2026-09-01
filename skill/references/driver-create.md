@@ -11,7 +11,7 @@
 | `$K drivers` | **驱动实例**列表（已创建/已安装的） | ❌ |
 | `$K driver <id>` | 实例详情（含 `device.settings` 连接参数） | ❌ |
 | `$K driver-schema <driverType>` | 驱动 schema（settings/tags/commands/events 字段定义） | ❌ |
-| `$K driver-create -n <名称> -t <驱动key>` | 创建驱动实例 | ✅ |
+| `$K driver-create -n <名称> -t <驱动key>` | 创建驱动实例（集群节点加 `--run-mode node --cluster <集群实例id>`） | ✅ |
 | `$K driver-install <instanceId>` | 安装驱动（默认阻塞等待到完成） | ✅ |
 | `$K driver-install-info <taskId>` | 查询安装进度（`--no-wait`/超时后续查） | ❌ |
 | `$K driver-update-config <instanceId> --file/--json` | 更新配置（device 块） | ✅ |
@@ -31,6 +31,14 @@
 
 **`driver-create -t` 填目录的 `name`（驱动 key），绝对禁止填分类路径**（如"行业驱动/电力"）。
 `driver-catalog` 输出已把分类改名为 `category`，直接用输出中的 `name` 字段即可。
+
+## ⚠️ 目录外驱动禁止创建（硬规则）
+
+**`-t` 的驱动 key 必须来自 `$K driver-catalog` 的输出；平台目录里没有的驱动，禁止调用 `driver-create`**（平台没有可安装的驱动包，创建了也无法安装运行）。
+
+- CLI 已内置强制校验：目录中无此 key 直接报错 `平台驱动目录中没有 "xxx"，禁止创建`，并附相近候选
+- 目录零匹配时的正确做法：**如实告知用户平台没有该驱动**（可列相近候选），换目录内驱动或联系平台管理员上架，**不得换名盲试、不得硬造 key**
+- 测试驱动（`test`）不在目录中属预期——它不走 `driver-create`，用 [workflow-full.md](workflow-full.md#测试驱动配置) 的固定配置
 
 ## 驱动目录
 
@@ -69,20 +77,36 @@ $K driver-create -n "..." -t ... --file payload.json   # 完整 payload 逃生�
 | 字段 | 默认 | 说明 |
 |------|------|------|
 | `-n, --name` | 必填 | 实例名称，**全局唯一** |
-| `-t, --type` | 必填 | 驱动 key（目录的 `name`） |
+| `-t, --type` | 必填* | 驱动 key（目录的 `name`）；集群节点模式可省略（自动继承 `--cluster` 集群的驱动类型） |
 | `--version` | 目录解析 | 驱动版本 |
 | `--run-mode` | `one` | `one` / `cluster` / `node` |
+| `--cluster` | - | 集群实例 id，**仅 `--run-mode node` 时必填**（见下方集群节点创建） |
 | `--distributed` | `all` | `all` / `average` / `lazy` |
 | `-d, --description` | 空 | 描述 |
 
-输出：`{id, name, driverType, driverVersion, runMode, distributed, hint}`。
+输出：`{id, name, driverType, driverVersion, runMode, groupId?, distributed, hint}`（`groupId` 仅集群节点返回，= 所选集群的 groupId）。
+
+### 集群节点创建
+
+`--run-mode node`（集群节点）表示把驱动挂到一个已存在的【集群】下运行，流程与前端一致：
+
+1. `$K drivers` 找 `runMode: "cluster"` 的集群实例（没有就先创建一个 `--run-mode cluster` 的集群驱动）
+2. `$K driver-create -n "<节点名称>" --run-mode node --cluster <集群实例id>`（`-t` 可省略）
+3. 照常 `$K driver-install <instanceId>` 安装（集群节点安装与其集群相同的驱动类型）
+
+CLI 内部处理（无需手工传 groupId）：
+
+- 校验 `--cluster` 指向的实例 `runMode === "cluster"`，否则报错
+- **driverType 继承集群实例的 `driverType`**（显式 `-t` 与集群不一致时报错拦截）
+- **把集群实例的 `groupId` 随创建 payload 传递**（其余模式 groupId 由后端创建时生成，CLI/前端不传）
 
 ⚠️ **创建纪律**（防"名称已存在"错误，曾因违反此规则出过线上 bug）：
 
 1. 创建前 CLI 自动预检名称唯一性，重名直接报已有实例 id —— **复用该实例，不要换名字盲试**
-2. **创建成功后必须记录返回的 `id`**，后续所有保存走 `driver-update-config`（PATCH 更新）
-3. 任何失败路径**禁止退回"重新创建"**——记录已存在，再 POST 必然重名报错
-4. 重试 = 重试失败的那一步（如重跑 `driver-install` 复用同一 instanceId），不是重做整个创建
+2. 创建前 CLI 自动校验驱动 key 在目录中存在，目录外驱动直接拒绝（见上方硬规则）
+3. **创建成功后必须记录返回的 `id`**，后续所有保存走 `driver-update-config`（PATCH 更新）
+4. 任何失败路径**禁止退回"重新创建"**——记录已存在，再 POST 必然重名报错
+5. 重试 = 重试失败的那一步（如重跑 `driver-install` 复用同一 instanceId），不是重做整个创建
 
 ## 安装与进度
 
@@ -180,6 +204,10 @@ $K driver-delete <instanceId>    # ⚠️ 会使其绑定的设备表失效，�
 | 错误 | 处理 |
 |------|------|
 | `驱动名称已存在: xxx（实例ID: ...）` | 复用该实例，勿换名盲试 |
+| `平台驱动目录中没有 "xxx"，禁止创建` | 平台没有该驱动；`driver-catalog` 查相近候选，换目录内驱动或联系管理员上架，勿硬造 key |
+| `集群节点模式必须提供 --cluster ...` | 先 `$K drivers` 找 `runMode=cluster` 的实例，再带 `--cluster <id>` 重试 |
+| `--cluster 必须指向 runMode=cluster 的集群驱动` | 所选实例不是集群，换正确的集群实例 |
+| `-t "..." 与集群实例的 driverType "..." 不一致` | 集群节点必须用与集群相同的驱动类型，去掉 `-t` 或改为一致 |
 | 安装 `err` 非空 | 读 err + outInfo 尾部定位；重跑 `driver-install` 复用同一实例 |
 | `verify: "service-missing"` / state 卡 `none`/`stop` | 先 `driver-restart`；仍不行带 serviceList 证据上报人工 |
 | schema 404 | 预期行为（未装完就查）；确认 install 完成后再查 |

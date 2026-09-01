@@ -104,8 +104,9 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
 
 ### ⚠️ 驱动信息必须来自用户指定或 `$K drivers` 查询
 
-- 用户指定驱动时，必须使用用户给出的驱动配置（driver/driverType/driverName/driverExampleId/groupId/driverGroupId），不能自行猜测或使用其他驱动
-- 测试驱动特征要严格遵守：`driver: "test"`, `driverType: "测试驱动"`, `driverExampleId: "test"`, `groupId: "test"`, `driverGroupId: "test_$$_test"`
+- 用户指定驱动时，必须使用用户给出的驱动配置（driver/groupId），不能自行猜测或使用其他驱动
+- ⚠️ **device 块的驱动关联字段只有 `driver` 和 `groupId` 两个**；`driverType`/`driverName`/`driverExampleId`/`driverGroupId` 是已废弃的冗余字段，**禁止写入**
+- 测试驱动特征要严格遵守：`driver: "test"`, `groupId: "test"`
 - 测试驱动的点位**不需要** area/offset/dataType 等协议字段，只需要 id/name/policy
 - 测试驱动完整配置详见 [workflow-full.md](workflow-full.md#测试驱动配置)
 
@@ -116,11 +117,7 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
 | device 字段 | 来源 | 示例值 |
 |-------------|------|--------|
 | `driver` | 驱动实例的 `driverType` | `"modbus"` |
-| `driverType` | 驱动实例的 `driverType` | `"modbus"` |
-| `driverName` | 驱动实例的 `name` | `"Modbus"` |
-| `driverExampleId` | 驱动实例的 `id` | `"69f1a55e..."` |
-| `groupId` | 驱动实例的 `id` | `"69f1a55e..."` |
-| `driverGroupId` | `"{driverType}_$$_{id}"` | `"modbus_$$_69f1a..."` |
+| `groupId` | 驱动实例的 `groupId` 字段（集群节点实例为其所属集群的 groupId；普通实例默认由后端生成） | `"69f1a55e..."` |
 | `settings` | 驱动实例的 `device.settings` | `{ "ip": "127.0.0.1", "port": 502 }` |
 
 ### 点位字段
@@ -162,12 +159,8 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
     ]
   },
   "device": {
-    "driver": "<driverType>",
-    "driverType": "<driverType>",
-    "driverName": "<name>",
-    "driverExampleId": "<id>",
-    "groupId": "<id>",
-    "driverGroupId": "<from $K driver>",
+    "driver": "<驱动实例的 driverType>",
+    "groupId": "<驱动实例的 groupId>",
     "emulator": false,
     "settings": { "ip": "127.0.0.1", "port": 502 },
     "tags": [
@@ -199,12 +192,15 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
 |------|------|
 | `id` | 驱动实例 ID |
 | `name` | 驱动名称 |
-| `driverType` | 驱动类型：`modbus`、`opcua`、`mqtt` 等 |
+| `driverType` | 驱动类型：`modbus`、`opcua`、`mqtt` 等（设备表 device 块的 `driver` 填这个值） |
 | `state` | 运行状态：`none`、`restarting`、`running`、`stop` |
 | `driverVersion` | 驱动版本 |
-| `runMode` | 运行模式：`one` |
+| `runMode` | 运行模式：`one`（单驱动）/ `cluster`（集群）/ `node`（集群节点） |
+| `groupId` | 集群组 ID（设备表 device 块的 `groupId` 填这个值；集群节点实例 = 其所属集群的 groupId，其余实例由后端创建时生成） |
 | `ports` | 端口映射 |
 | `device.settings` | 连接参数（ip/port 等） |
+
+集群节点（`runMode: "node"`）创建时必须指定一个已存在的【集群】（`runMode: "cluster"`）驱动实例，节点继承该集群的驱动类型并把集群的 `groupId` 存上，详见 [driver-create.md](driver-create.md#集群节点创建)。
 
 ## 关联
 

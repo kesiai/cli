@@ -20936,6 +20936,15 @@ var KesiApiClient = class {
   async updateTable(id, data) {
     await this.http.patch(`/core/t/schema/${id}`, data);
   }
+  /**
+   * 修改表标识（⚠️ 等同删除重建的特殊操作）：PATCH /core/t/schema/change/{旧id}，新 id 在 body.id
+   * 实测后端只读 body.id（其余字段忽略、表配置保留），但表下记录不迁移（将无法访问）；
+   * 普通 update 改不了 id（PATCH 的 body.id 不生效，对不存在的 id 静默无效）。
+   * 需同时改其他字段时：先 updateTable 再本方法。
+   */
+  async changeTableId(oldId, data) {
+    await this.http.patch(`/core/t/schema/change/${oldId}`, data);
+  }
   async deleteTable(id) {
     await this.http.delete(`/core/t/schema/${id}`);
   }
@@ -20963,6 +20972,15 @@ var KesiApiClient = class {
   }
   async updateTableRecord(tableName, id, data) {
     await this.http.patch(`/core/t/${tableName}/d/${id}`, data);
+  }
+  /**
+   * 修改记录标识（⚠️ 等同删除重建的特殊操作）：PATCH /core/t/{table}/d/change/{旧id}，新 id 在 body.id
+   * 实测后端只读 body.id（其余字段忽略、原数据保留），引用方（relate/时序数据/_settings 扩展）不迁移；
+   * 普通 update 改不了 id（PATCH 的 body.id 不生效，对不存在的 id 静默无效）。
+   * 需同时改其他字段时：先 updateTableRecord 再本方法。
+   */
+  async changeTableRecordId(tableName, oldId, data) {
+    await this.http.patch(`/core/t/${tableName}/d/change/${oldId}`, data);
   }
   async deleteTableRecord(tableName, id, attachment = false) {
     await this.http.delete(`/core/t/${tableName}/d/${id}`, {
@@ -21665,6 +21683,25 @@ async function tableDelete(id) {
     console.log(formatSuccess("\u5220\u9664\u6210\u529F"));
   });
 }
+async function tableChangeId(oldId, newId) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const original = await client.getTableById(oldId);
+    if (!original) {
+      throw new Error(`\u8868\u4E0D\u5B58\u5728: ${oldId}`);
+    }
+    const merged = { ...original, id: newId };
+    const validationResult = validateTableFields(merged);
+    const format = "text";
+    console.log(formatValidationResult(validationResult, format));
+    if (!validationResult.valid) {
+      throw new Error("\u5B57\u6BB5\u9A8C\u8BC1\u5931\u8D25\uFF0C\u8BF7\u4FEE\u590D\u540E\u91CD\u8BD5");
+    }
+    await client.changeTableId(oldId, merged);
+    console.log(formatSuccess(`\u8868\u6807\u8BC6\u5DF2\u4FEE\u6539: ${oldId} \u2192 ${newId}`));
+    console.log("\u26A0\uFE0F  \u4FEE\u6539\u6807\u8BC6\u540E\u8868\u914D\u7F6E\u4FDD\u7559\uFF0C\u4F46\u8868\u4E0B\u6240\u6709\u8BB0\u5F55\u4E0D\u4F1A\u8FC1\u79FB\uFF08\u5C06\u65E0\u6CD5\u8BBF\u95EE\uFF09\uFF1B\u5176\u5B83\u6570\u636E\u5BF9\u8BE5\u8868\u7684\u5F15\u7528\uFF08relate \u5173\u8054\u3001settable \u914D\u7F6E\u3001\u62A5\u8868/\u5927\u5C4F\u5F15\u7528\u7B49\uFF09\u4E5F\u4E0D\u4F1A\u81EA\u52A8\u8FC1\u79FB\uFF0C\u4E14\u64CD\u4F5C\u4E0D\u53EF\u6062\u590D\u3002");
+  });
+}
 
 // src/commands/record.ts
 var import_node_fs2 = require("node:fs");
@@ -21733,6 +21770,18 @@ async function recordsBatchDelete(tableName, ids) {
     const client = getApiClient();
     await client.batchDeleteTableRecords(tableName, ids);
     console.log(formatSuccess(`\u5DF2\u5220\u9664 ${ids.length} \u6761\u8BB0\u5F55`));
+  });
+}
+async function recordChangeId(tableName, oldId, newId) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const original = await client.getTableRecordById(tableName, oldId);
+    if (!original) {
+      throw new Error(`\u8BB0\u5F55\u4E0D\u5B58\u5728: ${tableName}/${oldId}`);
+    }
+    await client.changeTableRecordId(tableName, oldId, { ...original, id: newId });
+    console.log(formatSuccess(`\u8BB0\u5F55\u6807\u8BC6\u5DF2\u4FEE\u6539: ${oldId} \u2192 ${newId}`));
+    console.log("\u26A0\uFE0F  \u4FEE\u6539\u6807\u8BC6\u540E\u672C\u6761\u6570\u636E\u4FDD\u7559\uFF0C\u4F46\u5176\u5B83\u6570\u636E\u5BF9\u8BE5\u8BB0\u5F55\u7684\u5F15\u7528\uFF08\u5173\u8054\u5B57\u6BB5\u3001\u65F6\u5E8F\u6570\u636E\u3001_settings \u6269\u5C55\u914D\u7F6E\u7B49\uFF09\u4E0D\u4F1A\u81EA\u52A8\u8FC1\u79FB\uFF0C\u4E14\u64CD\u4F5C\u4E0D\u53EF\u6062\u590D\u3002");
   });
 }
 
@@ -22183,18 +22232,41 @@ async function driverCreate(options) {
       payload = deepMerge(payload, JSON.parse((0, import_node_fs7.readFileSync)(options.file, "utf-8")));
     }
     if (!payload.name?.trim()) throw new Error("\u8BF7\u63D0\u4F9B\u9A71\u52A8\u540D\u79F0 (-n)");
-    if (!payload.driverType) throw new Error("\u8BF7\u63D0\u4F9B\u9A71\u52A8\u7C7B\u578B key (-t\uFF0C\u5373 driver-catalog \u8F93\u51FA\u7684 name \u5B57\u6BB5)");
     const client = getApiClient();
+    if (payload.runMode === "node") {
+      if (!options.cluster) {
+        throw new Error("\u96C6\u7FA4\u8282\u70B9\u6A21\u5F0F\u5FC5\u987B\u63D0\u4F9B --cluster <\u96C6\u7FA4\u5B9E\u4F8Bid>\uFF08runMode=cluster \u7684\u9A71\u52A8\u5B9E\u4F8B\uFF0C\u5148\u7528 drivers \u547D\u4EE4\u67E5\u8BE2\uFF09");
+      }
+      const cluster = await client.getDriverInstanceById(options.cluster);
+      if (!cluster) throw new Error(`\u96C6\u7FA4\u5B9E\u4F8B '${options.cluster}' \u4E0D\u5B58\u5728`);
+      if (cluster.runMode !== "cluster") {
+        throw new Error(`\u5B9E\u4F8B '${options.cluster}' \u7684 runMode \u4E3A '${cluster.runMode}'\uFF0C--cluster \u5FC5\u987B\u6307\u5411 runMode=cluster \u7684\u96C6\u7FA4\u9A71\u52A8`);
+      }
+      if (!cluster.groupId) throw new Error(`\u96C6\u7FA4\u5B9E\u4F8B '${options.cluster}' \u7F3A\u5C11 groupId\uFF0C\u65E0\u6CD5\u521B\u5EFA\u96C6\u7FA4\u8282\u70B9`);
+      if (payload.driverType && payload.driverType !== cluster.driverType) {
+        throw new Error(`-t "${payload.driverType}" \u4E0E\u96C6\u7FA4\u5B9E\u4F8B\u7684 driverType "${cluster.driverType}" \u4E0D\u4E00\u81F4\uFF0C\u96C6\u7FA4\u8282\u70B9\u5FC5\u987B\u4F7F\u7528\u4E0E\u96C6\u7FA4\u76F8\u540C\u7684\u9A71\u52A8\u7C7B\u578B\uFF08\u53EF\u7701\u7565 -t\uFF09`);
+      }
+      payload.driverType = cluster.driverType;
+      payload.groupId = cluster.groupId;
+    } else if (options.cluster) {
+      throw new Error("--cluster \u4EC5\u5728 --run-mode node\uFF08\u96C6\u7FA4\u8282\u70B9\uFF09\u65F6\u4F7F\u7528");
+    }
+    if (!payload.driverType) throw new Error("\u8BF7\u63D0\u4F9B\u9A71\u52A8\u7C7B\u578B key (-t\uFF0C\u5373 driver-catalog \u8F93\u51FA\u7684 name \u5B57\u6BB5)");
     const instances = await client.getDriverInstances({ limit: 1e3 });
     const existed = instances.find((i) => i.name === payload.name);
     if (existed) {
       throw new Error(`\u9A71\u52A8\u540D\u79F0\u5DF2\u5B58\u5728: ${payload.name}\uFF08\u5B9E\u4F8BID: ${existed.id}\uFF09\uFF0C\u5982\u9700\u590D\u7528\u8BF7\u76F4\u63A5\u4F7F\u7528\u8BE5\u5B9E\u4F8B`);
     }
-    if (!payload.driverVersion) {
-      const catalog = await client.getDriverCatalog();
-      const entry = catalog.find((c) => c.name === payload.driverType);
-      if (entry?.version) payload.driverVersion = entry.version;
+    const catalog = await client.getDriverCatalog();
+    const entry = catalog.find((c) => c.name === payload.driverType);
+    if (!entry) {
+      const kw = String(payload.driverType).toLowerCase();
+      const similar = catalog.filter((c) => [c.name, c.description, c.driverType].some((v) => String(v || "").toLowerCase().includes(kw))).slice(0, 3).map((c) => c.name);
+      throw new Error(
+        `\u5E73\u53F0\u9A71\u52A8\u76EE\u5F55\u4E2D\u6CA1\u6709 "${payload.driverType}"\uFF0C\u7981\u6B62\u521B\u5EFA\uFF08\u5E73\u53F0\u5185\u6CA1\u6709\u7684\u9A71\u52A8\u65E0\u6CD5\u5B89\u88C5\u8FD0\u884C\uFF09\u3002\u8BF7\u5148\u7528 driver-catalog \u67E5\u770B\u53EF\u5B89\u88C5\u7684\u9A71\u52A8` + (similar.length ? `\uFF0C\u76F8\u8FD1\u7684\u6709: ${similar.join("\u3001")}` : "")
+      );
     }
+    if (!payload.driverVersion && entry.version) payload.driverVersion = entry.version;
     let id = await client.createDriverInstance(payload);
     if (!id) {
       const after = await client.getDriverInstances({ limit: 1e3 });
@@ -22209,6 +22281,8 @@ async function driverCreate(options) {
         driverType: payload.driverType,
         driverVersion: payload.driverVersion,
         runMode: payload.runMode,
+        // 集群节点才有值（= 所选集群的 groupId），其余模式由后端生成、不传
+        ...payload.groupId ? { groupId: payload.groupId } : {},
         distributed: payload.distributed,
         hint: `\u4E0B\u4E00\u6B65: driver-install -i ${id}`
       },
@@ -22910,11 +22984,13 @@ addOutput(program2.command("tables").alias("tbl").description("\u67E5\u8BE2\u886
 addOutput(program2.command("table <id>").description("\u83B7\u53D6\u8868\u8BE6\u60C5")).action(tableGet);
 program2.command("table-create").description("\u521B\u5EFA\u8868").option("--file <path>", "\u4ECE JSON \u6587\u4EF6\u8BFB\u53D6").option("--json <json>", "JSON \u6570\u636E").action(tableCreate);
 program2.command("table-update <id>").description("\u66F4\u65B0\u8868").option("--file <path>", "\u4ECE JSON \u6587\u4EF6\u8BFB\u53D6").option("--json <json>", "JSON \u6570\u636E").action(tableUpdate);
+program2.command("table-change-id <oldId> <newId>").description("\u4FEE\u6539\u8868\u6807\u8BC6\uFF08\u26A0\uFE0F \u5220\u9664\u91CD\u5EFA\u8BED\u4E49\uFF0C\u5F15\u7528\u4E0D\u81EA\u52A8\u8FC1\u79FB\uFF0C\u4E0D\u53EF\u6062\u590D\uFF09").action(tableChangeId);
 program2.command("table-delete <id>").description("\u5220\u9664\u8868").action(tableDelete);
 addOutput(program2.command("records <table>").alias("rec").description("\u67E5\u8BE2\u8BB0\u5F55").option("-f, --filter <json>", "\u8FC7\u6EE4\u6761\u4EF6").option("-s, --sort <json>", "\u6392\u5E8F").option("-l, --limit <number>", "\u6570\u91CF\u9650\u5236", "50").option("--skip <number>", "\u8DF3\u8FC7\u6570\u91CF").option("--with-count", "\u8FD4\u56DE\u603B\u6570")).action(recordsList);
 addOutput(program2.command("record <table> <id>").description("\u83B7\u53D6\u5355\u6761\u8BB0\u5F55")).action(recordGet);
 program2.command("record-create <table>").description("\u521B\u5EFA\u8BB0\u5F55").option("--file <path>", "\u4ECE JSON \u6587\u4EF6\u8BFB\u53D6").option("--json <json>", "JSON \u6570\u636E").option("--data <json>", "JSON \u6570\u636E\uFF08\u522B\u540D\uFF09").option("--upsert", "\u5B58\u5728\u5219\u66F4\u65B0").action(recordCreate);
 program2.command("record-update <table> <id>").description("\u66F4\u65B0\u8BB0\u5F55").option("--file <path>", "\u4ECE JSON \u6587\u4EF6\u8BFB\u53D6").option("--json <json>", "JSON \u6570\u636E").option("--data <json>", "JSON \u6570\u636E\uFF08\u522B\u540D\uFF09").action(recordUpdate);
+program2.command("record-change-id <table> <oldId> <newId>").description("\u4FEE\u6539\u8BB0\u5F55\u6807\u8BC6\uFF08\u26A0\uFE0F \u5220\u9664\u91CD\u5EFA\u8BED\u4E49\uFF0C\u5F15\u7528\u4E0D\u81EA\u52A8\u8FC1\u79FB\uFF0C\u4E0D\u53EF\u6062\u590D\uFF09").action(recordChangeId);
 program2.command("record-delete <table> <id>").description("\u5220\u9664\u8BB0\u5F55").option("--attachment", "\u7EA7\u8054\u5220\u9664\u9644\u4EF6").action(recordDelete);
 program2.command("records-batch-delete <table> <ids...>").description("\u6279\u91CF\u5220\u9664\u8BB0\u5F55").action(recordsBatchDelete);
 addOutput(program2.command("tags <tableId>").description("\u67E5\u8BE2\u8868\u5C5E\u6027\u70B9")).action(tagsList);
@@ -22952,7 +23028,7 @@ addOutput(program2.command("users").description("\u7528\u6237\u5217\u8868").opti
 addOutput(program2.command("drivers").description("\u9A71\u52A8\u5B9E\u4F8B\u5217\u8868")).action(driversList);
 addOutput(program2.command("driver <id>").description("\u9A71\u52A8\u5B9E\u4F8B\u8BE6\u60C5")).action(driverGet);
 addOutput(program2.command("driver-catalog").description("\u9A71\u52A8\u76EE\u5F55\uFF08\u53EF\u5B89\u88C5\u9A71\u52A8\u5217\u8868\uFF0C\u542B\u5DF2\u5B89\u88C5\u6CE8\u8BB0\uFF09").option("--search <keyword>", "\u5173\u952E\u8BCD\u8FC7\u6EE4\uFF08\u5339\u914D key/\u63CF\u8FF0/\u5206\u7C7B\uFF09")).action(driverCatalog);
-program2.command("driver-create").description("\u521B\u5EFA\u9A71\u52A8\u5B9E\u4F8B\uFF08-t \u586B\u9A71\u52A8 key\uFF0C\u5373 driver-catalog \u7684 name \u5B57\u6BB5\uFF09").requiredOption("-n, --name <name>", "\u5B9E\u4F8B\u540D\u79F0\uFF08\u552F\u4E00\uFF09").requiredOption("-t, --type <driverKey>", "\u9A71\u52A8 key").option("--version <version>", "\u9A71\u52A8\u7248\u672C\uFF08\u7F3A\u7701\u4ECE\u76EE\u5F55\u89E3\u6790\uFF09").option("--run-mode <mode>", "\u8FD0\u884C\u6A21\u5F0F: one | cluster | node", "one").option("--distributed <mode>", "\u5206\u914D\u65B9\u5F0F: all | average | lazy", "all").option("-d, --description <text>", "\u63CF\u8FF0").option("--file <path>", "\u5B8C\u6574 payload JSON \u6587\u4EF6\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").option("--json <json>", "\u5B8C\u6574 payload JSON\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").action(driverCreate);
+program2.command("driver-create").description("\u521B\u5EFA\u9A71\u52A8\u5B9E\u4F8B\uFF08-t \u586B\u9A71\u52A8 key\uFF0C\u5373 driver-catalog \u7684 name \u5B57\u6BB5\uFF09").requiredOption("-n, --name <name>", "\u5B9E\u4F8B\u540D\u79F0\uFF08\u552F\u4E00\uFF09").option("-t, --type <driverKey>", "\u9A71\u52A8 key\uFF08--run-mode node \u53EF\u7701\u7565\uFF0C\u81EA\u52A8\u7EE7\u627F --cluster \u96C6\u7FA4\u7684\u9A71\u52A8\u7C7B\u578B\uFF09").option("--version <version>", "\u9A71\u52A8\u7248\u672C\uFF08\u7F3A\u7701\u4ECE\u76EE\u5F55\u89E3\u6790\uFF09").option("--run-mode <mode>", "\u8FD0\u884C\u6A21\u5F0F: one | cluster | node", "one").option("--cluster <clusterInstanceId>", "\u96C6\u7FA4\u5B9E\u4F8B id\uFF08\u4EC5 --run-mode node \u65F6\u5FC5\u586B\uFF1A\u7EE7\u627F\u5176 driverType\uFF0C\u5E76\u628A\u5176 groupId \u5B58\u4E0A\uFF09").option("--distributed <mode>", "\u5206\u914D\u65B9\u5F0F: all | average | lazy", "all").option("-d, --description <text>", "\u63CF\u8FF0").option("--file <path>", "\u5B8C\u6574 payload JSON \u6587\u4EF6\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").option("--json <json>", "\u5B8C\u6574 payload JSON\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").action(driverCreate);
 addOutput(program2.command("driver-install <instanceId>").description("\u5B89\u88C5\u9A71\u52A8\uFF08\u9ED8\u8BA4\u963B\u585E\u7B49\u5F85\u5230\u5B8C\u6210\uFF0C\u8FDB\u5EA6\u8D70 stderr\uFF09").option("--url <url>", "\u5B89\u88C5\u5305\u5730\u5740\uFF08\u7F3A\u7701\u4ECE\u9A71\u52A8\u76EE\u5F55\u89E3\u6790\uFF09").option("--no-wait", "\u53EA\u89E6\u53D1\u5B89\u88C5\uFF0C\u7ACB\u5373\u8FD4\u56DE taskId").option("--timeout <seconds>", "\u7B49\u5F85\u8D85\u65F6\uFF08\u79D2\uFF09", "300").option("--interval <seconds>", "\u8F6E\u8BE2\u95F4\u9694\uFF08\u79D2\uFF09", "2")).action(driverInstall);
 addOutput(program2.command("driver-install-info <taskId>").description("\u67E5\u8BE2\u5B89\u88C5\u8FDB\u5EA6\uFF08--no-wait / \u8D85\u65F6\u540E\u7EED\u67E5\u7528\uFF09")).action(driverInstallInfo);
 program2.command("driver-update-config <instanceId>").description("\u66F4\u65B0\u9A71\u52A8\u914D\u7F6E\uFF08device \u5757: settings/tags/commands/events\uFF0C\u6DF1\u5408\u5E76\uFF09").option("--file <path>", "\u914D\u7F6E JSON \u6587\u4EF6").option("--json <json>", "\u914D\u7F6E JSON \u6570\u636E").action(driverUpdateConfig);

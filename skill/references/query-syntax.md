@@ -256,7 +256,7 @@ $K query driver/driverInstance --limit 50
 | 系统变量 | `core/systemVariable` | 字段：id, name, uid, type, value |
 | 数据字典 | `core/catalog` | 字段：id, name, parentId, order |
 | 表 Schema | `core/t/schema` | 字段：id, title, template, tableMajorType, recordCount |
-| 驱动实例 | `driver/driverInstance` | 字段：id, name, driverType, state |
+| 驱动实例 | `driver/driverInstance` | 字段：id, name, driverType, groupId, runMode, state |
 | 报警事件 | `warning/warning` | 字段：id, time, level, status, processed, desc |
 | 报警规则 | `warning/rule` | 字段：id, name, level, enable |
 | 报表 | `report/report` | 字段：id, name, reportType, type, interval |

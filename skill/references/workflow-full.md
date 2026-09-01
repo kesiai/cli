@@ -110,11 +110,7 @@ $K driver-schema <driverType>     # 获取点位的必填字段和枚举值
 ```json
 {
   "driver": "test",
-  "driverType": "测试驱动",
-  "driverName": "测试驱动",
-  "driverExampleId": "test",
   "groupId": "test",
-  "driverGroupId": "test_$$_test",
   "emulator": false,
   "settings": {},
   "tags": [
@@ -126,12 +122,9 @@ $K driver-schema <driverType>     # 获取点位的必填字段和枚举值
 ```
 
 **测试驱动字段说明：**
+- ⚠️ 驱动关联字段只有 `driver` 和 `groupId` 两个；`driverType`/`driverName`/`driverExampleId`/`driverGroupId` 为已废弃字段，禁止写入
 - `driver`: 固定为 `"test"`
-- `driverType`: 固定为 `"测试驱动"`
-- `driverName`: 固定为 `"测试驱动"`
-- `driverExampleId`: 驱动实例 id，测试驱动固定为 `"test"`
-- `groupId`: 驱动实例 id，测试驱动固定为 `"test"`
-- `driverGroupId`: 按 `{driverType}_$$_{id}` 格式生成，测试驱动为 `"test_$$_test"`
+- `groupId`: 测试驱动固定为 `"test"`
 - `emulator`: 仿真开关，测试驱动固定为 `false`（不开启仿真）
 - `settings`: 空对象 `{}`
 - `commands`: 空数组 `[]`（如需要可添加指令）
@@ -245,12 +238,8 @@ $K driver-schema <driverType>     # 获取点位的必填字段和枚举值
           ]
         },
         "device": {
-          "driver": "<驱动名>",
-          "driverType": "<驱动类型>",
-          "driverName": "<驱动名称>",
-          "driverExampleId": "<from $K drivers>",
-          "groupId": "<from $K driver>",
-          "driverGroupId": "<from $K driver>",
+          "driver": "<驱动实例的 driverType>",
+          "groupId": "<驱动实例的 groupId>",
           "emulator": false,
           "settings": { "<连接参数>": "<值>" },
           "tags": [

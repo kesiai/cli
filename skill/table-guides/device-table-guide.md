@@ -134,11 +134,7 @@
 {
   "device": {
     "driver": "modbus",
-    "driverType": "modbus",
-    "driverName": "Modbus 驱动",
-    "driverExampleId": "69f1a55e-1234-5678-90ab-cdef12345678",
     "groupId": "69f1a55e-1234-5678-90ab-cdef12345678",
-    "driverGroupId": "modbus_$$_69f1a55e-1234-5678-90ab-cdef12345678",
     "emulator": false,
     "settings": {
       "ip": "192.168.1.100",
@@ -154,11 +150,7 @@
 {
   "device": {
     "driver": "test",
-    "driverType": "测试驱动",
-    "driverName": "测试驱动",
-    "driverExampleId": "test",
     "groupId": "test",
-    "driverGroupId": "test_$$_test",
     "emulator": false,
     "settings": {}
   }
@@ -168,18 +160,13 @@
 ### 校验规则
 
 1. **驱动查询前置**：必须先执行 `$K drivers` 检查驱动是否存在
-2. **驱动字段映射**：
-   - `driver` 和 `driverType` 必须相同
-   - `driverExampleId` 必须来自 `$K drivers` 返回的 `id`
-   - `groupId` 必须与 `driverExampleId` 相同
-   - `driverGroupId` 格式必须为 `{driverType}_$$_{id}`
+2. **驱动字段映射**（⚠️ 驱动关联字段只有 `driver` 和 `groupId` 两个）：
+   - `driver` = 驱动实例的 `driverType`
+   - `groupId` = 驱动实例的 `groupId` 字段（用 `$K driver <id>` 查详情获取）
+   - `driverType`/`driverName`/`driverExampleId`/`driverGroupId` 为已废弃字段，禁止写入
 3. **测试驱动固定配置**：
    - `driver` = `"test"`
-   - `driverType` = `"测试驱动"`
-   - `driverName` = `"测试驱动"`
-   - `driverExampleId` = `"test"`
    - `groupId` = `"test"`
-   - `driverGroupId` = `"test_$$_test"`
    - `emulator` = `false`
    - `settings` = `{}`
 4. **settings 校验**：连接参数必须来自 `$K driver <id>` 返回的 `device.settings`
