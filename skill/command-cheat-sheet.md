@@ -56,7 +56,9 @@ $K tables --base-url http://<平台>/rest --project-id <projectId> --token <toke
 | 报警系统 | 12 | 报警规则、报警事件、报警归档 | [references/warning.md](references/warning.md) |
 | 文件管理 | 3 | 文件上传、下载、删除 | [references/file.md](references/file.md) |
 | 报表管理 | 6 | 报表 CRUD、执行、导出 | [references/report.md](references/report.md) |
-| 用户管理 | 2 | 用户 CRUD、角色管理 | [references/user.md](references/user.md) |
+| 用户/角色 | 10 | 用户 CRUD、角色 CRUD、角色绑定 | [references/user.md](references/user.md) · [references/role.md](references/role.md) |
+| 数据字典 | 5 | 字典项 CRUD（全局键值对） | [references/dict.md](references/dict.md) |
+| 系统设置 | 3 | 全局配置读、局部更新、字段类型 | [references/setting.md](references/setting.md) |
 
 ---
 
@@ -196,12 +198,38 @@ $K records devices -f 'name~空调' -l 5        # 模糊搜索
 
 ---
 
-## 用户管理
+## 用户 / 角色管理
 
 | 命令 | 说明 |
 |------|------|
-| `$K users` | 查询用户列表 |
-| `$K user <id>` | 查看用户详情 |
+| `$K users` / `$K user <id>` | 用户列表（稀疏投影，看不到角色）/ 用户详情 |
+| `$K user-create -n <名> -p <密码> [--nick-name] [--roles <角色...>] [--json]` | 创建用户（密码明文；角色收 id 或名） |
+| `$K user-update <id> [--nick-name] [-p] [--disabled] [--roles <角色...>] [--clear-roles]` | 更新（roles 整体替换；--clear-roles 全解绑） |
+| `$K user-delete <id>` | 删除（admin 拒删） |
+| `$K roles` / `$K role <id>` | 角色列表 / 详情 |
+| `$K role-create -n <名> [-d <描述>] [--permission <权限...>]` | 创建角色 |
+| `$K role-update <id> [-n] [-d] [--permission <权限...>]` | 更新（permission 整体替换） |
+| `$K role-delete <id>` | 删除（被用户引用时拒删，先解绑） |
+
+---
+
+## 数据字典
+
+| 命令 | 说明 |
+|------|------|
+| `$K dicts` / `$K dict <idOrUid>` | 字典列表（不含 value）/ 详情（含 value，接受 id 或编号） |
+| `$K dict-create -n <名> --uid <编号> --type <类型> --value <值>` | 创建（type: number/string/boolean/date/object/array；object/array 传 JSON 字符串） |
+| `$K dict-update <idOrUid> [--name/--uid/--type/--value]` | 局部更新（value 按生效 type 校验） |
+| `$K dict-delete <idOrUid>` | 删除 |
+
+---
+
+## 系统设置
+
+| 命令 | 说明 |
+|------|------|
+| `$K setting` / `$K setting-fields` | 全量读 / 字段类型速查 |
+| `$K setting-update --json '{"language":"zh-CN"}'` | 局部更新（⚠️ 即时影响全平台，按键合并，测完必须还原；CLI 拒改 dependencies 和空 name） |
 
 ---
 
@@ -220,13 +248,12 @@ $K query-get <resource> <id>
 |----------|------|
 | `core/t/schema` | 数据表定义 |
 | `core/setting` | 系统设置（包含报警类型 warningkind） |
-| `core/user` | 用户管理 |
-| `core/role` | 角色管理 |
+| `core/user` | 用户（写操作用 user-* 命令，不用 query） |
+| `core/role` | 角色（写操作用 role-* 命令，不用 query） |
 | `core/department` | 组织架构 |
-| `core/systemVariable` | 数据字典 |
+| `core/systemVariable` | 数据字典（字典项全局键值对；写操作用 dict-* 命令，不用 query） |
 | `core/catalog` | 数据分组 |
-| `core/log` | 操作日志 |
-| `syslog/log` | 系统日志 |
+| `core/log` | 用户界面个性化设置存储（**不是操作日志**） |
 | `core/t/<tableId>/d` | 数据表记录（需替换 tableId） |
 | `driver/driverInstance` | 驱动实例 |
 | `driver/instruct` | 指令状态 |

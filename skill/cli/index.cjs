@@ -20845,7 +20845,9 @@ var KesiApiClient = class {
       timeout: config.timeout || 3e4,
       headers: {
         "Content-Type": "application/json",
-        "x-request-project": config.projectId || "default"
+        "x-request-project": config.projectId || "default",
+        // 平台的 name 等字段是 i18n 字段，按此头解析返回（无头时返回值不确定）——固定住保证输出可断言
+        "Accept-Language": "zh-CN"
       }
     });
     this.http.interceptors.request.use(async (cfg) => {
@@ -21306,16 +21308,81 @@ Content-Type: ${mime}\r
     const res = await this.http.get(`/${resource}/${id}`);
     return res.data || null;
   }
-  // ==================== 用户 ====================
+  // ==================== 用户 / 角色 ====================
   async getCurrentUser() {
-    const res = await this.http.get("/api/user/me");
+    const res = await this.http.get("/core/user/me");
     return res.data || null;
   }
   async getUsers(params) {
-    const res = await this.http.get("/api/users", {
+    const res = await this.http.get("/core/user", {
       params: { query: JSON.stringify(params || {}) }
     });
     return res.data || [];
+  }
+  async getUserById(id) {
+    const res = await this.http.get(`/core/user/${id}`);
+    return res.data || null;
+  }
+  async createUser(data) {
+    const res = await this.http.post("/core/user", data);
+    return res.data.InsertedID || res.data.id;
+  }
+  async updateUser(id, data) {
+    await this.http.patch(`/core/user/${id}`, data);
+  }
+  async deleteUser(id) {
+    await this.http.delete(`/core/user/${id}`);
+  }
+  async getRoles(params) {
+    const res = await this.http.get("/core/role", {
+      params: { query: JSON.stringify(params || {}) }
+    });
+    return res.data || [];
+  }
+  async getRoleById(id) {
+    const res = await this.http.get(`/core/role/${id}`);
+    return res.data || null;
+  }
+  async createRole(data) {
+    const res = await this.http.post("/core/role", data);
+    return res.data.InsertedID || res.data.id;
+  }
+  async updateRole(id, data) {
+    await this.http.patch(`/core/role/${id}`, data);
+  }
+  async deleteRole(id) {
+    await this.http.delete(`/core/role/${id}`);
+  }
+  /** 数据字典列表（core/systemVariable）。端点不支持 query.filter（真机验证被静默忽略），只能全量拉。 */
+  async getSystemVariables() {
+    const res = await this.http.get("/core/systemVariable", {
+      params: { query: JSON.stringify({ limit: 1e3 }) }
+    });
+    return res.data || [];
+  }
+  /** 字典详情（列表投影不含 value，只有详情有） */
+  async getSystemVariableById(id) {
+    const res = await this.http.get(`/core/systemVariable/${id}`);
+    return res.data || null;
+  }
+  async createSystemVariable(data) {
+    const res = await this.http.post("/core/systemVariable", data);
+    return res.data.InsertedID || res.data.id;
+  }
+  async updateSystemVariable(id, data) {
+    await this.http.patch(`/core/systemVariable/${id}`, data);
+  }
+  async deleteSystemVariable(id) {
+    await this.http.delete(`/core/systemVariable/${id}`);
+  }
+  /** 系统设置全量读（core/setting 是单例对象，PATCH 要求 body 携带 id） */
+  async getSettings() {
+    const res = await this.http.get("/core/setting");
+    return res.data || null;
+  }
+  /** 局部更新系统设置（服务端按键合并；返回 {status:"OK"} 不回实体，需另读） */
+  async updateSettings(data) {
+    await this.http.patch("/core/setting", data);
   }
 };
 
@@ -22542,6 +22609,25 @@ async function reportDelete(id) {
 }
 
 // src/commands/user.ts
+async function resolveRolesInput(rawRoles) {
+  if (!rawRoles?.length) return void 0;
+  const inputs = rawRoles.flatMap((r) => String(r).split(",")).map((s) => s.trim()).filter(Boolean);
+  if (!inputs.length) return void 0;
+  const client = getApiClient();
+  const roles = await client.getRoles({ limit: 1e3 });
+  const out = [];
+  for (const input of inputs) {
+    const hit = roles.find((r) => r.id === input) || roles.find((r) => r.name === input);
+    if (!hit) {
+      const known = roles.slice(0, 10).map((r) => `${r.name}(${r.id})`).join("\u3001");
+      throw new Error(
+        `\u89D2\u8272 "${input}" \u4E0D\u5B58\u5728\uFF08--roles \u53EA\u63A5\u53D7\u89D2\u8272 id \u6216\u89D2\u8272\u540D\uFF09\u3002\u73B0\u6709\u89D2\u8272: ${known}`
+      );
+    }
+    if (!out.some((x) => x.id === hit.id)) out.push({ id: hit.id });
+  }
+  return out;
+}
 async function userGetCurrent(options) {
   await executeCommand(async () => {
     const client = getApiClient();
@@ -22557,6 +22643,356 @@ async function usersList(options) {
     const result = await client.getUsers(params);
     const format = resolveOutputFormat(options.output);
     console.log(formatOutput(result, format));
+  });
+}
+async function userGet(id, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const user = await client.getUserById(id);
+    if (!user || !user.id) throw new Error(`\u7528\u6237 '${id}' \u4E0D\u5B58\u5728`);
+    console.log(formatOutput(user, resolveOutputFormat(options.output)));
+  });
+}
+async function userCreate(options) {
+  await executeCommand(async () => {
+    const name = String(options.name || "").trim();
+    if (!name) throw new Error("\u8BF7\u63D0\u4F9B\u7528\u6237\u540D (-n)");
+    if (!options.password) throw new Error("\u8BF7\u63D0\u4F9B\u5BC6\u7801 (--password\uFF0C\u660E\u6587\u4F20\u5165\uFF0C\u670D\u52A1\u7AEF\u8D1F\u8D23\u54C8\u5E0C\u5B58\u50A8)");
+    const client = getApiClient();
+    const existed = (await client.getUsers({ limit: 1e3, filter: { name } })).find((u) => u.name === name);
+    if (existed) throw new Error(`\u7528\u6237\u540D\u5DF2\u5B58\u5728: ${name}\uFF08\u7528\u6237ID: ${existed.id}\uFF09\uFF0C\u5982\u9700\u4FEE\u6539\u8BF7\u7528 user-update`);
+    let payload = { name, password: options.password };
+    if (options.nickName) payload.nickName = options.nickName;
+    const roles = await resolveRolesInput(options.roles);
+    if (roles) payload.roles = roles;
+    if (options.json) {
+      payload = deepMerge(payload, JSON.parse(options.json));
+    }
+    const id = await client.createUser(payload);
+    console.log(formatSuccess(`\u7528\u6237\u521B\u5EFA\u6210\u529F`));
+    console.log(formatOutput(
+      { id, name, rolesIds: roles?.map((r) => r.id) || [] },
+      resolveOutputFormat(options.output)
+    ));
+  });
+}
+async function userUpdate(id, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const current = await client.getUserById(id);
+    if (!current || !current.id) throw new Error(`\u7528\u6237 '${id}' \u4E0D\u5B58\u5728`);
+    const payload = {};
+    if (options.nickName !== void 0) payload.nickName = options.nickName;
+    if (options.password) payload.password = options.password;
+    if (options.disabled !== void 0) payload.disabled = options.disabled === true || options.disabled === "true";
+    const roles = await resolveRolesInput(options.roles);
+    if (roles) payload.roles = roles;
+    if (options.clearRoles) payload.roles = [];
+    if (!Object.keys(payload).length) {
+      throw new Error("\u6CA1\u6709\u53EF\u66F4\u65B0\u7684\u5B57\u6BB5\uFF08--nick-name / --password / --disabled / --roles / --clear-roles \u81F3\u5C11\u7ED9\u4E00\u4E2A\uFF09");
+    }
+    await client.updateUser(id, payload);
+    console.log(formatSuccess(`\u7528\u6237\u5DF2\u66F4\u65B0: ${id}`));
+    console.log(formatOutput({ id, updated: Object.keys(payload) }, resolveOutputFormat(options.output)));
+  });
+}
+async function userDelete(id, options) {
+  await executeCommand(async () => {
+    if (id === "admin") {
+      throw new Error("\u62D2\u7EDD\u5220\u9664 admin\uFF08\u5E73\u53F0\u5185\u7F6E\u7BA1\u7406\u5458\u8D26\u6237\uFF0C\u5220\u4E86\u4F1A\u5BFC\u81F4\u65E0\u6CD5\u767B\u5F55\u7BA1\u7406\u7AEF\uFF09");
+    }
+    const client = getApiClient();
+    await client.deleteUser(id);
+    console.log(formatSuccess(`\u7528\u6237\u5DF2\u5220\u9664: ${id}`));
+    console.log(formatOutput({ ok: true, id }, resolveOutputFormat(options.output)));
+  });
+}
+
+// src/commands/role.ts
+var PERMISSION_RE = /^[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/;
+function parsePermissions(raw) {
+  if (!raw?.length) return void 0;
+  const items = raw.flatMap((p) => String(p).split(",")).map((s) => s.trim()).filter(Boolean);
+  const bad = items.filter((p) => !PERMISSION_RE.test(p));
+  if (bad.length) {
+    throw new Error(
+      `permission \u683C\u5F0F\u975E\u6CD5: ${bad.join("\u3001")}\uFF08\u5E94\u4E3A "<\u8D44\u6E90>.<\u52A8\u4F5C>"\uFF0C\u5982 apps.view / tables.edit\uFF09`
+    );
+  }
+  return [...new Set(items)];
+}
+async function rolesList(options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const params = normalizeQueryOptions(options);
+    const result = await client.getRoles(params);
+    console.log(formatOutput(result, resolveOutputFormat(options.output)));
+  });
+}
+async function roleGet(id, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const role = await client.getRoleById(id);
+    if (!role || !role.id) throw new Error(`\u89D2\u8272 '${id}' \u4E0D\u5B58\u5728`);
+    console.log(formatOutput(role, resolveOutputFormat(options.output)));
+  });
+}
+async function roleCreate(options) {
+  await executeCommand(async () => {
+    const name = String(options.name || "").trim();
+    if (!name) throw new Error("\u8BF7\u63D0\u4F9B\u89D2\u8272\u540D (-n)");
+    const client = getApiClient();
+    const dup = (await client.getRoles({ limit: 1e3 })).filter((r) => r.name === name);
+    if (dup.length) {
+      throw new Error(`\u5DF2\u5B58\u5728\u540C\u540D\u89D2\u8272: ${name}\uFF08ID: ${dup.map((r) => r.id).join("\u3001")}\uFF09\u2014\u2014\u89D2\u8272\u91CD\u540D\u5E73\u53F0\u4E0D\u62E6\uFF0C\u8BF7\u6362\u540D\u6216\u76F4\u63A5\u7528\u5DF2\u6709\u89D2\u8272`);
+    }
+    const payload = { name };
+    if (options.description) payload.description = options.description;
+    const permission = parsePermissions(options.permission);
+    if (permission) payload.permission = permission;
+    const id = await client.createRole(payload);
+    console.log(formatSuccess(`\u89D2\u8272\u521B\u5EFA\u6210\u529F`));
+    console.log(formatOutput({ id, name }, resolveOutputFormat(options.output)));
+  });
+}
+async function roleUpdate(id, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const current = await client.getRoleById(id);
+    if (!current || !current.id) throw new Error(`\u89D2\u8272 '${id}' \u4E0D\u5B58\u5728`);
+    const payload = {};
+    if (options.name) payload.name = options.name;
+    if (options.description !== void 0) payload.description = options.description;
+    const permission = parsePermissions(options.permission);
+    if (permission) payload.permission = permission;
+    if (!Object.keys(payload).length) {
+      throw new Error("\u6CA1\u6709\u53EF\u66F4\u65B0\u7684\u5B57\u6BB5\uFF08--name / --description / --permission \u81F3\u5C11\u7ED9\u4E00\u4E2A\uFF09");
+    }
+    await client.updateRole(id, payload);
+    console.log(formatSuccess(`\u89D2\u8272\u5DF2\u66F4\u65B0: ${id}`));
+    console.log(formatOutput({ id, updated: Object.keys(payload) }, resolveOutputFormat(options.output)));
+  });
+}
+async function roleDelete(id, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const role = await client.getRoleById(id);
+    if (!role || !role.id) throw new Error(`\u89D2\u8272 '${id}' \u4E0D\u5B58\u5728`);
+    if (role.name === "\u8D85\u7EA7\u7BA1\u7406\u5458") {
+      throw new Error("\u62D2\u7EDD\u5220\u9664\u5185\u7F6E\u89D2\u8272\u300C\u8D85\u7EA7\u7BA1\u7406\u5458\u300D\u3002\u786E\u9700\u64CD\u4F5C\u8BF7\u5728\u5E73\u53F0\u7BA1\u7406\u7AEF\u8FDB\u884C");
+    }
+    const users = await client.getUsers({ limit: 1e3 });
+    const bound = [];
+    for (const u of users.slice(0, 500)) {
+      const detail = await client.getUserById(u.id);
+      if (Array.isArray(detail?.rolesIds) && detail.rolesIds.includes(id)) bound.push(detail);
+    }
+    if (users.length > 500) {
+      console.error(`\u26A0\uFE0F \u7528\u6237\u6570 ${users.length} \u8D85\u8FC7 500\uFF0C\u5F15\u7528\u68C0\u67E5\u53EA\u8986\u76D6\u524D 500 \u4E2A\u7528\u6237`);
+    }
+    if (bound.length) {
+      throw new Error(
+        `\u89D2\u8272 '${role.name}' \u4ECD\u88AB ${bound.length} \u4E2A\u7528\u6237\u5F15\u7528: ${bound.map((u) => `${u.name}(${u.id})`).join("\u3001")}\u3002\u5148\u9010\u4E2A\u89E3\u7ED1\uFF08user-update <\u7528\u6237id> --roles <\u4FDD\u7559\u7684\u89D2\u8272>\uFF0C\u5168\u90E8\u89E3\u7ED1\u7528 --clear-roles\uFF09\uFF0C\u518D\u5220\u9664\u89D2\u8272\uFF08\u76F4\u63A5\u5220\u4F1A\u9759\u9ED8\u89E3\u7ED1\u8FD9\u4E9B\u7528\u6237\uFF09`
+      );
+    }
+    await client.deleteRole(id);
+    console.log(formatSuccess(`\u89D2\u8272\u5DF2\u5220\u9664: ${id}`));
+    console.log(formatOutput({ ok: true, id }, resolveOutputFormat(options.output)));
+  });
+}
+
+// src/commands/dict.ts
+var DICT_TYPES = ["number", "string", "boolean", "date", "object", "array"];
+function parseDictValue(type, raw) {
+  if (type === "number") {
+    const n = Number(raw);
+    if (raw === "" || raw === null || raw === void 0 || Number.isNaN(n)) {
+      throw new Error(`type=number \u4F46\u503C "${raw}" \u4E0D\u662F\u6570\u5B57\uFF08--value \u76F4\u63A5\u4F20\u6570\u5B57\uFF0C\u5982 --value 150\uFF09`);
+    }
+    return n;
+  }
+  if (type === "boolean") {
+    if (raw === true || raw === "true") return true;
+    if (raw === false || raw === "false") return false;
+    throw new Error(`type=boolean \u4F46\u503C "${raw}" \u4E0D\u662F\u5E03\u5C14\uFF08\u5B57\u7B26\u4E32 "true" \u4F1A\u88AB\u5E73\u53F0 400 \u62D2\u7EDD\uFF1B\u5199 --value true \u6216 --value false\uFF09`);
+  }
+  if (type === "date") {
+    const s = String(raw);
+    if (!/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      throw new Error(`type=date \u4F46\u503C "${raw}" \u4E0D\u662F\u65F6\u95F4\u5B57\u7B26\u4E32\uFF08\u683C\u5F0F\u5982 "2026-01-02 03:04:05"\uFF1B\u6BEB\u79D2\u65F6\u95F4\u6233\u4F1A\u88AB\u5E73\u53F0 400 \u62D2\u7EDD\uFF09`);
+    }
+    return s;
+  }
+  if (type === "object" || type === "array") {
+    let parsed;
+    try {
+      parsed = JSON.parse(String(raw));
+    } catch {
+      throw new Error(`type=${type} \u7684 --value \u5FC5\u987B\u662F\u5408\u6CD5 JSON\uFF08\u5982 --value '{"unit":"kWh","max":200}' \u6216 --value '[1,2,3]'\uFF09`);
+    }
+    if (type === "object" && (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))) {
+      throw new Error(`type=object \u4F46\u89E3\u6790\u51FA\u7684\u4E0D\u662F JSON \u5BF9\u8C61\uFF08\u5982 --value '{"unit":"kWh"}'\uFF09`);
+    }
+    if (type === "array" && !Array.isArray(parsed)) {
+      throw new Error(`type=array \u4F46\u89E3\u6790\u51FA\u7684\u4E0D\u662F JSON \u6570\u7EC4\uFF08\u5982 --value '[1,2,3]'\uFF09`);
+    }
+    return parsed;
+  }
+  return String(raw);
+}
+async function resolveDict(key) {
+  const client = getApiClient();
+  const all3 = await client.getSystemVariables();
+  const hit = all3.find((d) => d.id === key) || all3.find((d) => d.uid === key);
+  if (!hit) {
+    const known = all3.slice(0, 10).map((d) => `${d.name}(${d.uid})`).join("\u3001");
+    throw new Error(`\u5B57\u5178\u9879 '${key}' \u4E0D\u5B58\u5728\uFF08dict \u547D\u4EE4\u63A5\u53D7 id \u6216\u7F16\u53F7 uid\uFF09\u3002\u73B0\u6709: ${known}`);
+  }
+  return { id: hit.id, uid: hit.uid };
+}
+async function dictsList(options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const result = await client.getSystemVariables();
+    console.log(formatOutput(result, resolveOutputFormat(options.output)));
+  });
+}
+async function dictGet(key, options) {
+  await executeCommand(async () => {
+    const { id } = await resolveDict(key);
+    const client = getApiClient();
+    const detail = await client.getSystemVariableById(id);
+    if (!detail || !detail.id) throw new Error(`\u5B57\u5178\u9879 '${key}' \u4E0D\u5B58\u5728`);
+    console.log(formatOutput(detail, resolveOutputFormat(options.output)));
+  });
+}
+async function dictCreate(options) {
+  await executeCommand(async () => {
+    const name = String(options.name || "").trim();
+    const uid = String(options.uid || "").trim();
+    const type = String(options.type || "").trim();
+    if (!name) throw new Error("\u8BF7\u63D0\u4F9B\u540D\u79F0 (-n)");
+    if (!uid) throw new Error("\u8BF7\u63D0\u4F9B\u7F16\u53F7 (--uid\uFF0C\u5168\u5E93\u552F\u4E00)");
+    if (!type) throw new Error(`\u8BF7\u63D0\u4F9B\u7C7B\u578B (--type\uFF0C\u53EF\u9009: ${DICT_TYPES.join(" / ")})`);
+    if (!DICT_TYPES.includes(type)) {
+      throw new Error(`\u4E0D\u652F\u6301\u7684\u7C7B\u578B "${type}"\uFF08\u5E73\u53F0\u4E0D\u6821\u9A8C type\uFF0C\u4E71\u586B\u80FD\u5B58\u8FDB\u53BB\u4F46\u5B57\u5178\u9875\u6253\u4E0D\u5F00\uFF1B\u53EF\u9009: ${DICT_TYPES.join(" / ")})`);
+    }
+    if (options.value === void 0 || options.value === "") {
+      throw new Error("\u8BF7\u63D0\u4F9B\u503C (--value\uFF0C\u5FC5\u586B\uFF1B\u5F62\u6001\u7531 --type \u51B3\u5B9A)");
+    }
+    const value = parseDictValue(type, options.value);
+    const client = getApiClient();
+    const id = await client.createSystemVariable({ name, uid, type, value });
+    console.log(formatSuccess("\u5B57\u5178\u9879\u521B\u5EFA\u6210\u529F"));
+    console.log(formatOutput({ id, uid, name, type }, resolveOutputFormat(options.output)));
+  });
+}
+async function dictUpdate(key, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const { id } = await resolveDict(key);
+    const current = await client.getSystemVariableById(id);
+    if (!current || !current.id) throw new Error(`\u5B57\u5178\u9879 '${key}' \u4E0D\u5B58\u5728`);
+    const payload = {};
+    if (options.name) payload.name = String(options.name).trim();
+    if (options.uid) payload.uid = String(options.uid).trim();
+    if (options.type) {
+      const type = String(options.type).trim();
+      if (!DICT_TYPES.includes(type)) {
+        throw new Error(`\u4E0D\u652F\u6301\u7684\u7C7B\u578B "${type}"\uFF08\u53EF\u9009: ${DICT_TYPES.join(" / ")})`);
+      }
+      payload.type = type;
+    }
+    const effectiveType = payload.type || current.type;
+    if (options.value !== void 0) {
+      payload.value = parseDictValue(effectiveType, options.value);
+    } else if (payload.type && payload.type !== current.type) {
+      parseDictValue(payload.type, current.value);
+    }
+    if (!Object.keys(payload).length) {
+      throw new Error("\u6CA1\u6709\u53EF\u66F4\u65B0\u7684\u5B57\u6BB5\uFF08--name / --uid / --type / --value \u81F3\u5C11\u7ED9\u4E00\u4E2A\uFF09");
+    }
+    await client.updateSystemVariable(id, payload);
+    const detail = await client.getSystemVariableById(id);
+    console.log(formatSuccess(`\u5B57\u5178\u9879\u5DF2\u66F4\u65B0: ${detail?.uid || key}`));
+    console.log(formatOutput(detail, resolveOutputFormat(options.output)));
+  });
+}
+async function dictDelete(key, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const { id, uid } = await resolveDict(key);
+    await client.deleteSystemVariable(id);
+    console.log(formatSuccess(`\u5B57\u5178\u9879\u5DF2\u5220\u9664: ${uid}`));
+    console.log(formatOutput({ ok: true, id, uid }, resolveOutputFormat(options.output)));
+  });
+}
+
+// src/commands/setting.ts
+var READONLY_KEYS = ["dependencies", "id"];
+var FIELD_TYPES = {
+  // 真机/前端反推的类型速查（不完整；写错类型平台会报 unmarshal 错误并点名实际类型）
+  name: "string",
+  copyright: "string",
+  language: "string",
+  notShowCode: "boolean",
+  notShowCodeAdmin: "boolean",
+  useBrowserLanguage: "boolean",
+  enableCors: "boolean",
+  liteMode: "boolean",
+  propTag: "string",
+  loginDuration: "object",
+  loginLimit: "object",
+  loginSettings: "object",
+  email: "object",
+  wechat: "object",
+  dingtalk: "object",
+  sms: "object",
+  warning: "object",
+  logSaveRule: "object",
+  onlineCheck: "object",
+  bigModelSetting: "object"
+};
+async function settingShow(options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const result = await client.getSettings();
+    if (!result || !result.id) throw new Error("\u8BFB\u53D6\u7CFB\u7EDF\u8BBE\u7F6E\u5931\u8D25\uFF08core/setting \u65E0\u8FD4\u56DE\uFF09");
+    console.log(formatOutput(result, resolveOutputFormat(options.output)));
+  });
+}
+async function settingUpdate(options) {
+  await executeCommand(async () => {
+    if (!options.json) throw new Error(`\u8BF7\u63D0\u4F9B\u8981\u66F4\u65B0\u7684\u5B57\u6BB5 (--json '{"language":"zh-CN"}')`);
+    let changes;
+    try {
+      changes = JSON.parse(options.json);
+    } catch {
+      throw new Error(`--json \u4E0D\u662F\u5408\u6CD5 JSON: ${options.json}`);
+    }
+    if (!changes || typeof changes !== "object" || Array.isArray(changes)) {
+      throw new Error("--json \u5FC5\u987B\u662F\u5BF9\u8C61\uFF08\u952E\u503C\u5BF9\uFF09");
+    }
+    for (const key of READONLY_KEYS) {
+      if (key in changes) throw new Error(`\u5B57\u6BB5 "${key}" \u53EA\u8BFB\uFF0C\u4E0D\u5141\u8BB8\u4FEE\u6539${key === "dependencies" ? "\uFF08\u5E73\u53F0\u670D\u52A1\u88C5\u914D\u6E05\u5355\uFF0C\u6539\u4E86\u4F1A\u5F71\u54CD\u670D\u52A1\u542F\u52A8\uFF09" : ""}`);
+    }
+    if ("name" in changes) {
+      if (changes.name === null) throw new Error("name \u4E0D\u5141\u8BB8\u7F6E null\uFF08\u5E73\u53F0\u5217\u975E\u7A7A\u7EA6\u675F\uFF0C\u4F1A 400 \u5B57\u6BB5\u7F6E\u7A7A\u5931\u8D25\uFF09");
+      if (String(changes.name).trim() === "") throw new Error("name \u4E0D\u5141\u8BB8\u7A7A\u5B57\u7B26\u4E32\uFF08\u5E73\u53F0\u4F1A\u9759\u9ED8\u5FFD\u7565\uFF0C\u7B49\u4E8E\u6CA1\u6539\uFF1B\u8981\u6539\u540D\u8BF7\u7ED9\u975E\u7A7A\u503C\uFF09");
+    }
+    const client = getApiClient();
+    const current = await client.getSettings();
+    if (!current || !current.id) throw new Error("\u8BFB\u53D6\u7CFB\u7EDF\u8BBE\u7F6E\u5931\u8D25\uFF08\u62FF\u4E0D\u5230 id\uFF0C\u65E0\u6CD5 PATCH\uFF09");
+    await client.updateSettings({ id: current.id, ...changes });
+    const after = await client.getSettings();
+    const diff = Object.keys(changes).map((k) => `${k}: ${JSON.stringify(current[k])} \u2192 ${JSON.stringify(after[k])}`);
+    console.log(formatSuccess("\u7CFB\u7EDF\u8BBE\u7F6E\u5DF2\u66F4\u65B0\uFF08\u6309\u952E\u5408\u5E76\uFF0C\u672A\u4F20\u5B57\u6BB5\u4E0D\u52A8\uFF09"));
+    console.log(formatOutput({ updated: diff }, resolveOutputFormat(options.output)));
+  });
+}
+async function settingFields(options) {
+  await executeCommand(async () => {
+    console.log(formatOutput(FIELD_TYPES, resolveOutputFormat(options.output)));
   });
 }
 
@@ -23436,8 +23872,24 @@ addOutput(program2.command("report-execute <id>").description("\u6267\u884C\u62A
 program2.command("report-create").description("\u521B\u5EFA\u62A5\u8868").option("--file <path>", "\u5B9A\u4E49\u6587\u4EF6").requiredOption("-n, --name <name>", "\u540D\u79F0").requiredOption("-t, --type <type>", "\u7C7B\u578B").option("-d, --description <desc>", "\u63CF\u8FF0").option("-c, --config <json>", "\u914D\u7F6E").action(reportCreate);
 program2.command("report-update <id>").description("\u66F4\u65B0\u62A5\u8868").option("-n, --name <name>", "\u540D\u79F0").option("-d, --description <desc>", "\u63CF\u8FF0").option("-c, --config <json>", "\u914D\u7F6E").action(reportUpdate);
 program2.command("report-delete <id>").description("\u5220\u9664\u62A5\u8868").action(reportDelete);
-addOutput(program2.command("user").description("\u5F53\u524D\u7528\u6237")).action(userGetCurrent);
+addOutput(program2.command("user [id]").description("\u7528\u6237\u8BE6\u60C5\uFF08\u65E0 id = \u5F53\u524D\u7528\u6237\uFF09")).action((id, options) => id !== void 0 ? userGet(id, options) : userGetCurrent(options));
 addOutput(program2.command("users").description("\u7528\u6237\u5217\u8868").option("-f, --filter <json>", "\u8FC7\u6EE4").option("-l, --limit <number>", "\u6570\u91CF\u9650\u5236")).action(usersList);
+program2.command("user-create").description("\u521B\u5EFA\u7528\u6237\uFF08\u5BC6\u7801\u660E\u6587\u4F20\u5165\uFF0C\u670D\u52A1\u7AEF\u54C8\u5E0C\u5B58\u50A8\uFF09").option("-n, --name <name>", "\u7528\u6237\u540D\uFF08\u552F\u4E00\uFF0C\u91CD\u540D\u5E73\u53F0\u62D2\u5EFA\uFF09").option("-p, --password <pwd>", "\u5BC6\u7801\uFF08\u660E\u6587\uFF09").option("--nick-name <name>", "\u6635\u79F0").option("--roles <ids...>", "\u89D2\u8272\uFF08id \u6216\u89D2\u8272\u540D\uFF0C\u53EF\u591A\u4E2A\uFF1BCLI \u7EC4\u88C5\u4E3A\u5E73\u53F0\u8981\u6C42\u7684 roles:[{id}]\uFF09").option("--json <json>", "\u5B8C\u6574 payload \u8986\u76D6\uFF08\u7EC4\u7EC7\u5B57\u6BB5\u7B49\u957F\u5C3E\uFF0C\u6DF1\u5408\u5E76\uFF09").action(userCreate);
+program2.command("user-update <id>").description("\u66F4\u65B0\u7528\u6237\uFF08\u672A\u4F20\u5B57\u6BB5\u4FDD\u6301\u539F\u503C\uFF1B--roles \u6574\u4F53\u66FF\u6362\uFF09").option("--nick-name <name>", "\u6635\u79F0").option("-p, --password <pwd>", "\u5BC6\u7801\uFF08\u660E\u6587\uFF0C\u670D\u52A1\u7AEF\u91CD\u65B0\u54C8\u5E0C\uFF09").option("--disabled <bool>", "\u505C\u7528 (true/false)").option("--roles <ids...>", "\u89D2\u8272\uFF08id \u6216\u89D2\u8272\u540D\uFF0C\u53EF\u591A\u4E2A\uFF0C\u6574\u4F53\u66FF\u6362\uFF09").option("--clear-roles", "\u89E3\u7ED1\u5168\u90E8\u89D2\u8272").action(userUpdate);
+program2.command("user-delete <id>").description("\u5220\u9664\u7528\u6237\uFF08\u26A0\uFE0F \u7834\u574F\u6027\uFF1Badmin \u62D2\u5220\uFF09").action(userDelete);
+addOutput(program2.command("roles").description("\u89D2\u8272\u5217\u8868").option("-f, --filter <json>", "\u8FC7\u6EE4").option("-l, --limit <number>", "\u6570\u91CF\u9650\u5236")).action(rolesList);
+addOutput(program2.command("role <id>").description("\u89D2\u8272\u8BE6\u60C5")).action(roleGet);
+program2.command("role-create").description("\u521B\u5EFA\u89D2\u8272").option("-n, --name <name>", "\u89D2\u8272\u540D").option("-d, --description <text>", "\u63CF\u8FF0").option("--permission <perms...>", '\u6743\u9650\uFF08"<\u8D44\u6E90>.<\u52A8\u4F5C>"\uFF0C\u5982 apps.view\uFF0C\u53EF\u591A\u4E2A\uFF09').action(roleCreate);
+program2.command("role-update <id>").description("\u66F4\u65B0\u89D2\u8272\uFF08\u672A\u4F20\u5B57\u6BB5\u4FDD\u6301\u539F\u503C\uFF1B--permission \u6574\u4F53\u66FF\u6362\uFF09").option("-n, --name <name>", "\u89D2\u8272\u540D").option("-d, --description <text>", "\u63CF\u8FF0").option("--permission <perms...>", '\u6743\u9650\uFF08"<\u8D44\u6E90>.<\u52A8\u4F5C>"\uFF0C\u53EF\u591A\u4E2A\uFF0C\u6574\u4F53\u66FF\u6362\uFF09').action(roleUpdate);
+program2.command("role-delete <id>").description("\u5220\u9664\u89D2\u8272\uFF08\u26A0\uFE0F \u7834\u574F\u6027\uFF1B\u88AB\u7528\u6237\u5F15\u7528\u65F6\u62D2\u5220\uFF0C\u5148\u89E3\u7ED1\uFF09").action(roleDelete);
+addOutput(program2.command("dicts").description("\u6570\u636E\u5B57\u5178\u5217\u8868\uFF08\u5217\u8868\u4E0D\u542B value\uFF0C\u770B\u503C\u7528 dict <id|uid>\uFF09")).action(dictsList);
+addOutput(program2.command("dict <idOrUid>").description("\u5B57\u5178\u9879\u8BE6\u60C5\uFF08\u542B value\uFF1B\u63A5\u53D7 id \u6216\u7F16\u53F7 uid\uFF09")).action(dictGet);
+program2.command("dict-create").description("\u521B\u5EFA\u5B57\u5178\u9879\uFF08name/uid/type/value \u5168\u5FC5\u586B\uFF1Buid \u5168\u5E93\u552F\u4E00\uFF09").option("-n, --name <name>", "\u540D\u79F0").option("--uid <uid>", "\u7F16\u53F7\uFF08\u5168\u5E93\u552F\u4E00\uFF09").option("--type <type>", "\u7C7B\u578B\uFF08number/string/boolean/date/object/array\uFF09").option("--value <value>", "\u503C\uFF08\u5F62\u6001\u7531 type \u51B3\u5B9A\uFF1Bobject/array \u4F20 JSON \u5B57\u7B26\u4E32\uFF09").action(dictCreate);
+program2.command("dict-update <idOrUid>").description("\u66F4\u65B0\u5B57\u5178\u9879\uFF08\u672A\u4F20\u5B57\u6BB5\u4FDD\u6301\u539F\u503C\uFF09").option("-n, --name <name>", "\u540D\u79F0").option("--uid <uid>", "\u7F16\u53F7\uFF08\u6539\u6210\u5DF2\u5360\u7528\u7684\u7F16\u53F7\u4F1A\u88AB\u5E73\u53F0 400 \u62D2\u7EDD\uFF09").option("--type <type>", "\u7C7B\u578B\uFF08number/string/boolean/date/object/array\uFF09").option("--value <value>", "\u503C\uFF08\u6309\u751F\u6548 type \u6821\u9A8C\uFF09").action(dictUpdate);
+program2.command("dict-delete <idOrUid>").description("\u5220\u9664\u5B57\u5178\u9879\uFF08\u26A0\uFE0F \u7834\u574F\u6027\uFF09").action(dictDelete);
+addOutput(program2.command("setting").description("\u7CFB\u7EDF\u8BBE\u7F6E\u5168\u91CF\u8BFB\uFF08\u5168\u5C40\u5355\u4F8B\u914D\u7F6E\uFF09")).action(settingShow);
+addOutput(program2.command("setting-fields").description("\u7CFB\u7EDF\u8BBE\u7F6E\u5B57\u6BB5\u7C7B\u578B\u901F\u67E5")).action(settingFields);
+program2.command("setting-update").description("\u5C40\u90E8\u66F4\u65B0\u7CFB\u7EDF\u8BBE\u7F6E\uFF08\u26A0\uFE0F \u5373\u65F6\u5F71\u54CD\u5168\u5E73\u53F0\uFF0C\u6D4B\u5B8C\u5FC5\u987B\u8FD8\u539F\uFF1B\u6309\u952E\u5408\u5E76\uFF09").option("--json <json>", `\u8981\u6539\u7684\u952E\u503C\uFF0C\u5982 '{"language":"zh-CN"}'\uFF08CLI \u81EA\u52A8\u8865 id\uFF09`).action(settingUpdate);
 addOutput(program2.command("drivers").description("\u9A71\u52A8\u5B9E\u4F8B\u5217\u8868")).action(driversList);
 addOutput(program2.command("driver <id>").description("\u9A71\u52A8\u5B9E\u4F8B\u8BE6\u60C5")).action(driverGet);
 addOutput(program2.command("driver-catalog").description("\u9A71\u52A8\u76EE\u5F55\uFF08\u53EF\u5B89\u88C5\u9A71\u52A8\u5217\u8868\uFF0C\u542B\u5DF2\u5B89\u88C5\u6CE8\u8BB0\uFF09").option("--search <keyword>", "\u5173\u952E\u8BCD\u8FC7\u6EE4\uFF08\u5339\u914D key/\u63CF\u8FF0/\u5206\u7C7B\uFF09")).action(driverCatalog);

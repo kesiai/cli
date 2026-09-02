@@ -1,6 +1,6 @@
 # 用户管理
 
-用户管理涉及用户、角色、组织三个实体的关联操作。
+用户与角色是平台资源（非数据表），专用命令操作，不走 record-*。
 
 ---
 
@@ -8,216 +8,50 @@
 
 | 命令 | 说明 |
 |------|------|
-| `$K user` | 查看当前登录用户信息 |
-| `$K users [-f filter] [-l limit]` | 查询用户列表 |
+| `$K user [id]` | 用户详情（无 id = 当前用户，可能为空） |
+| `$K users [-f filter] [-l limit]` | 用户列表 |
+| `$K user-create -n <名> -p <密码> [--nick-name <昵称>] [--roles <角色...>] [--json <json>]` | 创建用户 |
+| `$K user-update <id> [--nick-name] [-p <密码>] [--disabled true/false] [--roles <角色...>] [--clear-roles]` | 更新用户 |
+| `$K user-delete <id>` | 删除用户（⚠️ 破坏性；`admin` 拒删） |
 
 ---
 
-## 用户创建完整流程
+## 关键语义
 
-用户创建涉及多个前置查询，按以下顺序执行：
-
-### 流程图
-
-```
-1. 查询角色列表 → 获取可用角色
-  ↓
-2. 查询组织表 → 获取所有 department 类型表
-  ↓
-3. 组装用户数据 → 包含 roles 和动态组织字段
-  ↓
-4. 执行创建 → $K record-create core/user
-```
+| 语义 | 说明 |
+|------|------|
+| 密码 | `--password` **明文**传入，服务端负责哈希存储；查询永不返回密码字段 |
+| 角色绑定 | `--roles` 收**角色 id 或角色名**（可多个/逗号分隔），CLI 解析后提交；**整体替换**语义，不传则不动；全部解绑用 `--clear-roles` |
+| 用户名唯一 | 重名平台拒建；CLI 预检会直接报出已存在用户的 id |
+| `users` 列表是稀疏投影 | 只有 id/name 等少数字段，**看不到角色绑定**——用 `user <id>` 查详情 |
+| 停用 | `--disabled true`（不删数据，账号不可登录） |
+| 长尾字段 | 组织字段等通过 `user-create --json '<json>'` 深合并传入 |
 
 ---
 
-## 部分 1/3：查询角色列表
+## 动态组织字段（部门数据权限）
 
-### 执行命令
-
-```bash
-$K query core/role -l 100
-```
-
-### 返回数据（示例）
-
-```json
-[
-  {
-    "id": "63bbe63057ed18243e9d9d02",
-    "name": "超级管理员",
-    "examineType": "",
-    "examineStatus": "",
-    "examineObj": null,
-    "examineFinal": ""
-  },
-  {
-    "id": "74acc74168fe29354f0e13e13",
-    "name": "普通管理员",
-    "examineType": "",
-    "examineStatus": "",
-    "examineObj": null,
-    "examineFinal": ""
-  }
-]
-```
-
-### 用途
-
-用户创建时，`roles` 字段需要从这里选择角色 ID。
-
----
-
-## 部分 2/3：查询组织表（动态字段来源）
-
-### ⚠️ 动态字段机制
-
-用户表中包含**动态组织字段**，字段名直接使用**组织表 ID**。
-
-这些字段来源于平台中所有 `template: "department"` 的组织表。
-
-### 执行命令
-
-```bash
-# 方法 1：查询所有 department 类型表
-$K query core/t/schema -f 'function=["dataAuth"]'
-
-# 方法 2：通过 scan 查看
-$K scan | grep "tableMajorType.*dataAuth"
-```
-
-### 返回数据（示例）
-
-假设平台有 2 个组织表：
-
-| 组织表 ID | 组织表名称 | 对应用户字段 |
-|-----------|-----------|-------------|
-| `dept_003` | 客服部 | `dept_003` |
-| `dept_004` | 技术部 | `dept_004` |
-
-**用户表中会自动生成对应的字段：**
+平台每个 `department`（组织）表会在用户上映射一个**同名字段**（字段名 = 组织表 id），值为该组织记录的数组：
 
 ```json
 {
-  "dept_003": [/* 客服部关联数据 */],
-  "dept_004": [/* 技术部关联数据 */]
+  "dept_003": [{ "id": "dept_003_r1", "name": "客服部" }]
 }
 ```
 
-### 组织字段数据结构
-
-每个组织字段（字段名 = 组织表 ID）的值为数组：
-
-```json
-{
-  "dept_003": [
-    {
-      "id": "dept_003",
-      "name": "客服部"
-    }
-  ]
-}
-```
-
----
-
-## 部分 3/3：用户数据结构
-
-### 完整用户创建 JSON
-
-```json
-{
-  "name": "yht",
-  "password": "admin123",
-  "password2": "admin123",
-  "roles": [
-    {
-      "id": "63bbe63057ed18243e9d9d02",
-      "name": "超级管理员"
-    }
-  ],
-  "remark": "备注说明",
-  "startTime": {
-    "type": "createTime"
-  },
-  "status": "active",
-  "binddingtalk": false,
-  "bindwechatee": false,
-  "identity": false,
-  "dept_003": [
-    {
-      "id": "dept_003",
-      "name": "客服部"
-    }
-  ]
-}
-```
-
-### 字段说明
-
-| 字段 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `name` | string | ✅ | 用户名 |
-| `password` | string | ✅ | 密码 |
-| `password2` | string | ✅ | 确认密码（需与 password 相同） |
-| `roles` | array | ✅ | 角色关联数组，从 `core/role` 查询 |
-| `remark` | string | | 备注说明 |
-| `startTime` | object | | 开始时间配置 `{ "type": "createTime" }` |
-| `status` | string | | 状态，如 `active` / `inactive` |
-| `binddingtalk` | boolean | | 是否绑定钉钉 |
-| `bindwechatee` | boolean | | 是否绑定企业微信 |
-| `identity` | boolean | | 身份验证 |
-| `<组织表ID>` | array | | 动态组织字段，字段名 = 组织表 ID，数量取决于 department 表数量 |
-
----
-
-## 执行创建
-
-### 命令
-
-```bash
-# 方法 1：使用 --json 参数
-$K record-create core/user --json '<完整 JSON>'
-
-# 方法 2：使用临时文件
-TMPFILE=$(mktemp)
-cat > $TMPFILE << 'EOF'
-{
-  "name": "yht",
-  "password": "admin123",
-  "password2": "admin123",
-  "roles": [...],
-  "dept_003": [...]
-}
-EOF
-
-$K record-create core/user --file $TMPFILE
-rm -f $TMPFILE
-```
-
----
-
-## 校验规则
-
-创建用户前必须校验：
-
-| 校验项 | 规则 |
-|--------|------|
-| `password` 和 `password2` | 必须相同 |
-| `roles` | 必须从 `core/role` 中存在的角色选择 |
-| `<组织表ID>` | ID 必须在对应组织表中存在 |
-| 动态组织字段 | 字段数量必须与 department 表数量一致 |
+- 查组织表：`$K tables` 找 department 类型表 → `$K records <表id>` 取记录 id
+- 创建带组织的用户：`$K user-create -n 张三 -p *** --json '{"dept_003":[{"id":"<记录id>","name":"客服部"}]}'`
+- 组织字段值里的 id 必须是组织表里真实存在的记录
 
 ---
 
 ## 常见错误
 
-| 错误 | 原因 | 修复方法 |
-|------|------|----------|
-| `密码不一致` | password ≠ password2 | 确保两次密码相同 |
-| `角色不存在` | roles 中的 ID 在 core/role 中不存在 | 先查询 `$K query core/role` |
-| `组织字段缺失` | 未包含某个组织表 ID 字段 | 先查询所有 department 表 |
-| `组织 ID 不存在` | 组织字段中的 ID 不存在 | 先查询对应组织表的记录 |
+| 错误 | 原因 | 处理 |
+|------|------|------|
+| `用户名已存在` | name 重复 | CLI 预检会报出已有用户 id，需要改用 user-update |
+| `角色 "X" 不存在` | --roles 传了不存在的角色 | 报错信息附现有角色清单，用其中的 id 或名称 |
+| `拒绝删除 admin` | 平台内置管理员 | 不可删 |
 
 ---
 
@@ -225,4 +59,3 @@ rm -f $TMPFILE
 
 - 角色管理：[role.md](role.md)
 - 组织表：[../table-guides/department-table-guide.md](../table-guides/department-table-guide.md)
-- 记录管理：[record.md](record.md)

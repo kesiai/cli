@@ -218,6 +218,10 @@ $K describe <tableId>     # 某张表的字段级 schema
 | [references/device.md](references/device.md) | 设备管理总览 |
 | [references/device-tag.md](references/device-tag.md) | 数据点详细 |
 | [references/driver-create.md](references/driver-create.md) | 驱动创建与管理命令参考 |
+| [references/user.md](references/user.md) | 用户管理（CRUD、角色绑定、组织字段） |
+| [references/role.md](references/role.md) | 角色管理（CRUD、permission 词表、引用守卫） |
+| [references/dict.md](references/dict.md) | 数据字典（字典项 CRUD、type 六枚举、value 形态） |
+| [references/setting.md](references/setting.md) | 系统设置（全局配置读写、字段类型、必须还原） |
 | [references/validation-rules.md](references/validation-rules.md) | 校验规则 |
 
 ---

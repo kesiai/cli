@@ -14,7 +14,10 @@
 | [query-syntax.md](query-syntax.md) | 查询语法 | 统一 JSON 查询格式：filter、sort、limit、skip、操作符 |
 | [record.md](record.md) | 记录管理 | 表记录 CRUD（业务数据行） |
 | [report.md](report.md) | 报表管理 | 统计分析报表视图 |
-| [user.md](user.md) | 用户管理 | 平台用户查询 |
+| [user.md](user.md) | 用户管理 | 用户 CRUD、角色绑定（id/名解析）、动态组织字段 |
+| [role.md](role.md) | 角色管理 | 角色 CRUD、permission 词表、引用守卫（角色引用一律用 id） |
+| [dict.md](dict.md) | 数据字典 | 字典项 CRUD、type 六枚举与 value 形态、uid 唯一 |
+| [setting.md](setting.md) | 系统设置 | 全局配置读写、字段类型表、name 不可清空等坑、必须还原 |
 | [warning.md](warning.md) | 报警系统 | 报警规则 + 报警事件两部分 |
 
 ## 设备子系统（device-* 系列）
@@ -76,4 +79,7 @@
 | 查询数据 | [query-syntax.md](query-syntax.md) → [record.md](record.md) |
 | 接入新驱动 | [driver-create.md](driver-create.md) → [workflow-driver-create.md](workflow-driver-create.md) |
 | 报警配置 | [warning.md](warning.md) → [device-warning-rule.md](device-warning-rule.md) |
+| 用户/角色管理 | [user.md](user.md) → [role.md](role.md) |
+| 数据字典 | [dict.md](dict.md) |
+| 系统设置 | [setting.md](setting.md) |
 | 文件上传 | [file.md](file.md) → [controls/upload.md](controls/upload.md) |

@@ -19,6 +19,8 @@ export class KesiApiClient {
       headers: {
         'Content-Type': 'application/json',
         'x-request-project': config.projectId || 'default',
+        // 平台的 name 等字段是 i18n 字段，按此头解析返回（无头时返回值不确定）——固定住保证输出可断言
+        'Accept-Language': 'zh-CN',
       },
     });
 
@@ -578,17 +580,98 @@ export class KesiApiClient {
     return res.data || null;
   }
 
-  // ==================== 用户 ====================
+  // ==================== 用户 / 角色 ====================
 
   async getCurrentUser(): Promise<any> {
-    const res = await this.http.get('/api/user/me');
+    const res = await this.http.get('/core/user/me');
     return res.data || null;
   }
 
   async getUsers(params?: Record<string, any>): Promise<any[]> {
-    const res = await this.http.get('/api/users', {
+    const res = await this.http.get('/core/user', {
       params: { query: JSON.stringify(params || {}) },
     });
     return res.data || [];
+  }
+
+  async getUserById(id: string): Promise<any> {
+    const res = await this.http.get(`/core/user/${id}`);
+    return res.data || null;
+  }
+
+  async createUser(data: any): Promise<string> {
+    const res = await this.http.post('/core/user', data);
+    return res.data.InsertedID || res.data.id;
+  }
+
+  async updateUser(id: string, data: any): Promise<void> {
+    await this.http.patch(`/core/user/${id}`, data);
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await this.http.delete(`/core/user/${id}`);
+  }
+
+  async getRoles(params?: Record<string, any>): Promise<any[]> {
+    const res = await this.http.get('/core/role', {
+      params: { query: JSON.stringify(params || {}) },
+    });
+    return res.data || [];
+  }
+
+  async getRoleById(id: string): Promise<any> {
+    const res = await this.http.get(`/core/role/${id}`);
+    return res.data || null;
+  }
+
+  async createRole(data: any): Promise<string> {
+    const res = await this.http.post('/core/role', data);
+    return res.data.InsertedID || res.data.id;
+  }
+
+  async updateRole(id: string, data: any): Promise<void> {
+    await this.http.patch(`/core/role/${id}`, data);
+  }
+
+  async deleteRole(id: string): Promise<void> {
+    await this.http.delete(`/core/role/${id}`);
+  }
+
+  /** 数据字典列表（core/systemVariable）。端点不支持 query.filter（真机验证被静默忽略），只能全量拉。 */
+  async getSystemVariables(): Promise<any[]> {
+    const res = await this.http.get('/core/systemVariable', {
+      params: { query: JSON.stringify({ limit: 1000 }) },
+    });
+    return res.data || [];
+  }
+
+  /** 字典详情（列表投影不含 value，只有详情有） */
+  async getSystemVariableById(id: string): Promise<any> {
+    const res = await this.http.get(`/core/systemVariable/${id}`);
+    return res.data || null;
+  }
+
+  async createSystemVariable(data: any): Promise<string> {
+    const res = await this.http.post('/core/systemVariable', data);
+    return res.data.InsertedID || res.data.id;
+  }
+
+  async updateSystemVariable(id: string, data: any): Promise<void> {
+    await this.http.patch(`/core/systemVariable/${id}`, data);
+  }
+
+  async deleteSystemVariable(id: string): Promise<void> {
+    await this.http.delete(`/core/systemVariable/${id}`);
+  }
+
+  /** 系统设置全量读（core/setting 是单例对象，PATCH 要求 body 携带 id） */
+  async getSettings(): Promise<any> {
+    const res = await this.http.get('/core/setting');
+    return res.data || null;
+  }
+
+  /** 局部更新系统设置（服务端按键合并；返回 {status:"OK"} 不回实体，需另读） */
+  async updateSettings(data: any): Promise<void> {
+    await this.http.patch('/core/setting', data);
   }
 }

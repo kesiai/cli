@@ -13,6 +13,9 @@ import * as file from './commands/file.js';
 import * as control from './commands/control.js';
 import * as report from './commands/report.js';
 import * as user from './commands/user.js';
+import * as role from './commands/role.js';
+import * as dict from './commands/dict.js';
+import * as setting from './commands/setting.js';
 import * as driver from './commands/driver.js';
 import * as driverSchema from './commands/driver-schema.js';
 import * as driverCatalog from './commands/driver-catalog.js';
@@ -242,10 +245,84 @@ program.command('report-create').description('创建报表').option('--file <pat
 program.command('report-update <id>').description('更新报表').option('-n, --name <name>', '名称').option('-d, --description <desc>', '描述').option('-c, --config <json>', '配置').action(report.reportUpdate);
 program.command('report-delete <id>').description('删除报表').action(report.reportDelete);
 
-// ==================== 用户 ====================
+// ==================== 用户 / 角色 ====================
 
-addOutput(program.command('user').description('当前用户')).action(user.userGetCurrent);
+addOutput(program.command('user [id]').description('用户详情（无 id = 当前用户）')).action((id: string | undefined, options: any) =>
+  id !== undefined ? user.userGet(id, options) : user.userGetCurrent(options));
+
 addOutput(program.command('users').description('用户列表').option('-f, --filter <json>', '过滤').option('-l, --limit <number>', '数量限制')).action(user.usersList);
+
+program.command('user-create')
+  .description('创建用户（密码明文传入，服务端哈希存储）')
+  .option('-n, --name <name>', '用户名（唯一，重名平台拒建）')
+  .option('-p, --password <pwd>', '密码（明文）')
+  .option('--nick-name <name>', '昵称')
+  .option('--roles <ids...>', '角色（id 或角色名，可多个；CLI 组装为平台要求的 roles:[{id}]）')
+  .option('--json <json>', '完整 payload 覆盖（组织字段等长尾，深合并）')
+  .action(user.userCreate);
+
+program.command('user-update <id>')
+  .description('更新用户（未传字段保持原值；--roles 整体替换）')
+  .option('--nick-name <name>', '昵称')
+  .option('-p, --password <pwd>', '密码（明文，服务端重新哈希）')
+  .option('--disabled <bool>', '停用 (true/false)')
+  .option('--roles <ids...>', '角色（id 或角色名，可多个，整体替换）')
+  .option('--clear-roles', '解绑全部角色')
+  .action(user.userUpdate);
+
+program.command('user-delete <id>').description('删除用户（⚠️ 破坏性；admin 拒删）').action(user.userDelete);
+
+addOutput(program.command('roles').description('角色列表').option('-f, --filter <json>', '过滤').option('-l, --limit <number>', '数量限制')).action(role.rolesList);
+addOutput(program.command('role <id>').description('角色详情')).action(role.roleGet);
+
+program.command('role-create')
+  .description('创建角色')
+  .option('-n, --name <name>', '角色名')
+  .option('-d, --description <text>', '描述')
+  .option('--permission <perms...>', '权限（"<资源>.<动作>"，如 apps.view，可多个）')
+  .action(role.roleCreate);
+
+program.command('role-update <id>')
+  .description('更新角色（未传字段保持原值；--permission 整体替换）')
+  .option('-n, --name <name>', '角色名')
+  .option('-d, --description <text>', '描述')
+  .option('--permission <perms...>', '权限（"<资源>.<动作>"，可多个，整体替换）')
+  .action(role.roleUpdate);
+
+program.command('role-delete <id>').description('删除角色（⚠️ 破坏性；被用户引用时拒删，先解绑）').action(role.roleDelete);
+
+// ==================== 数据字典 ====================
+
+addOutput(program.command('dicts').description('数据字典列表（列表不含 value，看值用 dict <id|uid>）')).action(dict.dictsList);
+addOutput(program.command('dict <idOrUid>').description('字典项详情（含 value；接受 id 或编号 uid）')).action(dict.dictGet);
+
+program.command('dict-create')
+  .description('创建字典项（name/uid/type/value 全必填；uid 全库唯一）')
+  .option('-n, --name <name>', '名称')
+  .option('--uid <uid>', '编号（全库唯一）')
+  .option('--type <type>', '类型（number/string/boolean/date/object/array）')
+  .option('--value <value>', '值（形态由 type 决定；object/array 传 JSON 字符串）')
+  .action(dict.dictCreate);
+
+program.command('dict-update <idOrUid>')
+  .description('更新字典项（未传字段保持原值）')
+  .option('-n, --name <name>', '名称')
+  .option('--uid <uid>', '编号（改成已占用的编号会被平台 400 拒绝）')
+  .option('--type <type>', '类型（number/string/boolean/date/object/array）')
+  .option('--value <value>', '值（按生效 type 校验）')
+  .action(dict.dictUpdate);
+
+program.command('dict-delete <idOrUid>').description('删除字典项（⚠️ 破坏性）').action(dict.dictDelete);
+
+// ==================== 系统设置 ====================
+
+addOutput(program.command('setting').description('系统设置全量读（全局单例配置）')).action(setting.settingShow);
+addOutput(program.command('setting-fields').description('系统设置字段类型速查')).action(setting.settingFields);
+
+program.command('setting-update')
+  .description('局部更新系统设置（⚠️ 即时影响全平台，测完必须还原；按键合并）')
+  .option('--json <json>', '要改的键值，如 \'{"language":"zh-CN"}\'（CLI 自动补 id）')
+  .action(setting.settingUpdate);
 
 // ==================== 驱动管理 ====================
 
