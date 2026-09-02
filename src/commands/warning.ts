@@ -22,12 +22,21 @@ export async function warningRulesGet(id: string, options: any): Promise<void> {
   });
 }
 
+// level 枚举：1提示 / 2一般 / 3重要 / 4严重
+function parseRuleLevel(raw: string | undefined): number {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 4) {
+    throw new Error(`报警级别 level 必须是 1-4 整数（1提示/2一般/3重要/4严重），收到: "${raw}"`);
+  }
+  return n;
+}
+
 export async function warningRulesCreate(options: any): Promise<void> {
   await executeCommand(async () => {
     const client = getApiClient();
     const data = {
       name: options.name,
-      level: Number(options.level),
+      level: parseRuleLevel(options.level),
       enable: options.enable !== 'false',
       description: options.description,
     };
@@ -42,11 +51,12 @@ export async function warningRulesUpdate(id: string, options: any): Promise<void
 
     // 1️⃣ 先获取原始规则
     const original = await client.getWarningRuleById(id);
+    if (!original) throw new Error(`报警规则不存在: ${id}`);
 
     // 2️⃣ 构建部分更新对象
     const partialData: any = {};
     if (options.name !== undefined) partialData.name = options.name;
-    if (options.level !== undefined) partialData.level = Number(options.level);
+    if (options.level !== undefined) partialData.level = parseRuleLevel(options.level);
     if (options.enable !== undefined) partialData.enable = options.enable !== 'false';
     if (options.description !== undefined) partialData.description = options.description;
 

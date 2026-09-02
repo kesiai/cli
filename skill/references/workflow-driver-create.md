@@ -28,6 +28,8 @@ $K drivers
 
 已存在同类型实例且 `state: "running"` → **建议复用该实例**（幂等，避免重复安装），用户同意即结束本工作流返回调用方。
 
+复用判据只看**驱动类型 + state**，不看 settings：settings 为空的 running 实例是首选复用目标（后续直接 `driver-update-config` 配上网关即可，优于新建+安装）；settings 已绑**其它网关且在服役**的实例不要改配——另选空实例或新建。
+
 ### 2. 查驱动目录
 
 ```bash
@@ -115,8 +117,7 @@ $K driver-schema <驱动key>
 
 ### 3. 生成点位/指令草案（⚠️ 先过门控）
 
-**门控：点位能否配在驱动实例 = schema `driver` 块是否定义了 `tags`。**
-主流协议驱动（modbus / siemens-s7 等）`driver` 块只有 settings——**跳过点位草案，不写实例 tags**。任务要求"定义/配置/新增数据点"时在最终报告如实说明：「驱动配置没有数据点定义，未配置数据点；数据点属于模型/设备层，建设备表时定义」。**不要以"任务要求数据点"为由把 tags 写进实例**（详见 [driver-create.md](driver-create.md#驱动-schema-与配置生成) 三块归属表）。
+**门控：点位能否配在驱动实例 = schema `driver` 块是否定义了 `tags`。** 主流协议驱动没有——**跳过点位草案、不写实例 tags**，最终报告如实说明「未配置数据点及原因」（CLI 对违规写入也会直接拒绝，规则见 [driver-create.md](driver-create.md#驱动-schema-与配置生成) 三块归属表）。
 
 只有 `driver` 块定义了 tags（极罕见）才继续：
 

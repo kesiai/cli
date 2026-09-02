@@ -26,12 +26,9 @@ $K warnings stats                # 报警统计
 
 ## 查询报警类型（warningkind）
 
-创建报警规则前，需要先查询可用的报警类型。
+创建报警规则前，用 `$K query-get core/setting` 查一次可用的报警类型。
 
-```bash
-# 查询系统设置（包含报警类型）
-$K query-get core/setting
-```
+⚠️ **`warning` 为 `null` / 无 `warningkind` 时（环境未配置）**：不要继续探测其它端点，直接按标准结构创建（不带 `type` 字段），并在最终报告注明「平台未配置报警类型，规则未关联 type」——平台接受这种规则。
 
 ### 返回数据结构
 

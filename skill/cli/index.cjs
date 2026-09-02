@@ -16168,8 +16168,9 @@ ${formatPlain(item)}`).join("\n\n");
   }
   return String(data);
 }
+var noColor = !!process.env.NO_COLOR;
 function formatSuccess(message) {
-  return `\x1B[32m\u2713 ${message}\x1B[0m`;
+  return noColor ? `\u2713 ${message}` : `\x1B[32m\u2713 ${message}\x1B[0m`;
 }
 
 // node_modules/axios/lib/helpers/bind.js
@@ -21330,19 +21331,57 @@ async function executeCommand(fn) {
   try {
     await fn();
   } catch (err) {
+    const red = process.env.NO_COLOR ? "" : "\x1B[31m";
+    const reset = process.env.NO_COLOR ? "" : "\x1B[0m";
     if (err?.code === "CONFIG_ERROR") {
-      console.error(`\x1B[31m\u2717 ${err.message}\x1B[0m`);
+      console.error(`${red}\u2717 ${err.message}${reset}`);
     } else if (err?.code === "AUTH_ERROR") {
-      console.error(`\x1B[31m\u2717 \u8BA4\u8BC1\u5931\u8D25: ${err.message}\x1B[0m`);
+      console.error(`${red}\u2717 \u8BA4\u8BC1\u5931\u8D25: ${err.message}${reset}`);
     } else if (err?.code === "API_ERROR") {
-      console.error(`\x1B[31m\u2717 API \u9519\u8BEF (${err.statusCode}): ${err.message}\x1B[0m`);
+      console.error(`${red}\u2717 API \u9519\u8BEF (${err.statusCode}): ${err.message}${reset}`);
     } else if (err?.code === "NETWORK_ERROR") {
-      console.error(`\x1B[31m\u2717 \u7F51\u7EDC\u9519\u8BEF: ${err.message}\x1B[0m`);
+      console.error(`${red}\u2717 \u7F51\u7EDC\u9519\u8BEF: ${err.message}${reset}`);
     } else {
-      console.error(`\x1B[31m\u2717 ${err?.message || err}\x1B[0m`);
+      console.error(`${red}\u2717 ${err?.message || err}${reset}`);
     }
     process.exit(1);
   }
+}
+function parseJsonOption(value) {
+  if (!value) return void 0;
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new Error(`\u65E0\u6548\u7684 JSON: ${value}`);
+  }
+}
+function parseKvData(values) {
+  const list = Array.isArray(values) ? values : values !== void 0 ? [values] : [];
+  if (list.length === 0) return void 0;
+  if (list.length === 1 && list[0].trimStart().startsWith("{")) {
+    return parseJsonOption(list[0]);
+  }
+  const out = {};
+  const put = (pair) => {
+    const eq = pair.indexOf("=");
+    if (eq <= 0) {
+      throw new Error(`--data \u683C\u5F0F\u4E3A key=value\uFF08\u591A\u4E2A\u7528 --data \u91CD\u590D\u4F20\u6216 & \u8FDE\u63A5\uFF0C\u6216\u4F20\u6574\u6BB5 JSON\uFF09: "${pair}"`);
+    }
+    const key = pair.slice(0, eq).trim();
+    const raw = pair.slice(eq + 1);
+    out[key] = raw === "true" ? true : raw === "false" ? false : raw === "null" ? null : raw !== "" && !isNaN(Number(raw)) ? Number(raw) : raw;
+  };
+  for (const item of list) {
+    if (item.includes("&")) {
+      const segs = item.split("&");
+      if (segs.every((s) => s.indexOf("=") > 0)) {
+        segs.forEach(put);
+        continue;
+      }
+    }
+    put(item);
+  }
+  return out;
 }
 function normalizeQueryOptions(options) {
   return {
@@ -21488,7 +21527,7 @@ function validateField(field, index) {
     return { valid: false, errors, warnings: warnings2 };
   }
   const controlTypeStr = String(controlType);
-  if (controlTypeStr === "select" || controlTypeStr === "relate") {
+  if (controlTypeStr === "select") {
     errors.push({
       field: field.key || field.identifier,
       type: "error",
@@ -21541,6 +21580,13 @@ function validateField(field, index) {
         message: `${fieldPath}: enum \u4E0D\u80FD\u4E3A\u7A7A\u6570\u7EC4`,
         path: "enum"
       });
+    } else if (!Array.isArray(field.enumNames) || field.enumNames.length !== field.enum.length) {
+      errors.push({
+        field: field.key || field.identifier,
+        type: "error",
+        message: `${fieldPath}: select-* \u5FC5\u987B\u63D0\u4F9B enumNames \u4E14\u4E0E enum \u7B49\u957F\u4E00\u4E00\u5BF9\u5E94\uFF08enum ${field.enum.length} \u9879\uFF09`,
+        path: "enumNames"
+      });
     }
   }
   return {
@@ -21559,14 +21605,20 @@ function validateTableFields(data) {
     });
     return { valid: false, errors, warnings: warnings2 };
   }
-  const fields = data.fieldSchema || data.fields || [];
-  if (!Array.isArray(fields)) {
-    errors.push({
-      type: "error",
-      message: "fieldSchema \u4E0D\u662F\u6570\u7EC4",
-      path: "fieldSchema"
-    });
-    return { valid: false, errors, warnings: warnings2 };
+  let fields;
+  if (data.schema?.properties && typeof data.schema.properties === "object" && !Array.isArray(data.schema.properties)) {
+    fields = Object.entries(data.schema.properties).map(([k, v]) => ({ key: k, ...v }));
+  } else {
+    const raw = data.fieldSchema || data.fields || [];
+    if (!Array.isArray(raw)) {
+      errors.push({
+        type: "error",
+        message: "fieldSchema \u4E0D\u662F\u6570\u7EC4",
+        path: "fieldSchema"
+      });
+      return { valid: false, errors, warnings: warnings2 };
+    }
+    fields = raw;
   }
   if (fields.length === 0) {
     warnings2.push({
@@ -21615,7 +21667,239 @@ function formatValidationResult(result, format = "text") {
   return lines.join("\n");
 }
 
+// src/core/table-guard.ts
+var TEMPLATE_MAP = {
+  common: { fn: [], major: "normal" },
+  device: { fn: ["computed", "device", "warning"], major: "device" },
+  department: { fn: ["dataAuth"], major: "dataAuth" },
+  settable: { fn: ["settable"], major: "settable" },
+  tableMapping: { fn: ["tableMapping"], major: "tableMapping" },
+  tableClasses: { fn: ["tableClasses"], major: "tableClasses" }
+};
+var MAJOR_TO_TEMPLATE = Object.fromEntries(Object.entries(TEMPLATE_MAP).map(([k, v]) => [v.major, k]));
+var PRESET_FIELDS = {
+  device: {
+    id: { controlType: "text", need: true },
+    name: { controlType: "text", need: true },
+    connectTime: { controlType: "date", need: false },
+    disable: { controlType: "boolean", need: false },
+    online: { controlType: "boolean", need: false },
+    off: { controlType: "boolean", need: false },
+    warnFlag: { controlType: "boolean", need: false }
+  },
+  department: {
+    id: { controlType: "text", need: true },
+    name: { controlType: "text", need: true }
+  },
+  settable: {
+    id: { controlType: "text", need: true },
+    table: { controlType: "text", need: true },
+    tabledata: { controlType: "text", need: true }
+  },
+  tableClasses: {
+    classesID: { controlType: "text", need: true, unique: true },
+    classesName: { controlType: "text", need: true, unique: true },
+    endCycle: { controlType: "select-string", need: true, enum: ["now", "next"] },
+    endTime: { controlType: "time", need: true },
+    startCycle: { controlType: "select-string", need: true, enum: ["before", "now", "after"] },
+    startTime: { controlType: "time", need: true }
+  }
+};
+var FULLROW_CONTROL_TYPES = ["rich-text", "editable-table", "map"];
+var POLICY_ENUM = ["save", "change", "drop", "period"];
+var PROTOCOL_TAG_FIELDS = ["area", "offset", "dataType", "nodeId", "topic"];
+var DEPRECATED_DEVICE_KEYS = ["driverType", "driverName", "driverExampleId", "driverGroupId"];
+var DEVICE_REQUIRED_KEYS = ["driver", "groupId", "emulator", "settings", "tags"];
+function normalizeSchemaBlock(block) {
+  const b = block && typeof block === "object" ? block : {};
+  const fields = b.fields || b.properties || {};
+  const required = Array.isArray(b.required) ? b.required : Object.keys(fields).filter((k) => fields[k] && (fields[k].need === true || fields[k].required === true));
+  return { required, fields };
+}
+function tableIdError(id) {
+  return /^[a-z][a-z0-9_]*$/.test(String(id || "")) ? null : `\u8868 id "${id}" \u4E0D\u6EE1\u8DB3 ^[a-z][a-z0-9_]*$\uFF08\u5C0F\u5199\u5B57\u6BCD\u5F00\u5934\uFF0C\u53EA\u542B\u5C0F\u5199\u5B57\u6BCD/\u6570\u5B57/\u4E0B\u5212\u7EBF\uFF09`;
+}
+async function buildDriverContext(client, data) {
+  const device = data && data.device;
+  if (!device || device.driver === void 0 || device.driver === "test") return {};
+  try {
+    const drivers = await client.getDriverInstances();
+    const hit = drivers.find((d) => d && d.driverType === device.driver && d.groupId === device.groupId);
+    if (!hit) return { drivers };
+    try {
+      return { drivers, driverSchema: await client.getDriverSchema(device.driver) };
+    } catch {
+      return { drivers };
+    }
+  } catch {
+    return {};
+  }
+}
+function validateTableGuard(input) {
+  const errors = [];
+  const warnings2 = [];
+  const { payload, merged, isUpdate } = input;
+  if (!isUpdate) {
+    const idErr = tableIdError(merged.id);
+    if (idErr) errors.push(idErr);
+    if (!merged.title) errors.push("\u8868\u7F3A\u5C11 title");
+    const schema = merged.schema || {};
+    if (schema.name !== void 0 && schema.name !== merged.id) errors.push(`schema.name(${schema.name}) \u5FC5\u987B\u7B49\u4E8E\u8868 id(${merged.id})`);
+    if (schema.title !== void 0 && schema.title !== merged.title) errors.push(`schema.title(${schema.title}) \u5FC5\u987B\u7B49\u4E8E\u8868 title(${merged.title})`);
+    if (schema.type !== void 0 && schema.type !== "object") errors.push(`schema.type \u5FC5\u987B\u662F "object"\uFF0C\u5B9E\u9645 ${schema.type}`);
+  }
+  const touchesTemplate = !isUpdate || payload.template !== void 0 || payload.function !== void 0;
+  const template = merged.template || (isUpdate ? MAJOR_TO_TEMPLATE[merged.tableMajorType] : void 0);
+  if (touchesTemplate) {
+    const want = TEMPLATE_MAP[template];
+    if (!want) {
+      errors.push(`\u672A\u77E5\u6A21\u677F template="${template}"\uFF0C\u5408\u6CD5\u503C: ${Object.keys(TEMPLATE_MAP).join("/")}`);
+    } else {
+      const fn = Array.isArray(merged.function) ? [...merged.function].sort() : [];
+      const fnWant = [...want.fn].sort();
+      if (JSON.stringify(fn) !== JSON.stringify(fnWant)) {
+        errors.push(`template="${template}" \u7684 function \u671F\u671B [${fnWant.join(",")}]\uFF0C\u5B9E\u9645 [${(merged.function || []).join(",")}]`);
+      }
+      if (merged.tableMajorType !== void 0 && merged.tableMajorType !== want.major) {
+        errors.push(`template="${template}" \u7684 tableMajorType \u671F\u671B ${want.major}\uFF0C\u5B9E\u9645 ${merged.tableMajorType}`);
+      }
+    }
+  }
+  const properties = merged.schema && merged.schema.properties || {};
+  const touchesProperties = !isUpdate || payload.schema && payload.schema.properties !== void 0;
+  if (touchesProperties && template) {
+    if (template === "tableMapping") {
+      if (Object.keys(properties).length > 0) {
+        errors.push(`tableMapping\uFF08\u6620\u5C04\u8868\uFF09\u521B\u5EFA\u65F6 properties \u5FC5\u987B\u4E3A\u7A7A {}\uFF08\u5B57\u6BB5\u7531\u5916\u90E8\u6570\u636E\u5E93\u6620\u5C04\u540C\u6B65\uFF09\uFF0C\u5B9E\u9645\u542B ${Object.keys(properties).join(",")}`);
+      }
+    } else {
+      const preset = PRESET_FIELDS[template];
+      if (preset) {
+        for (const [key, exp] of Object.entries(preset)) {
+          const f = properties[key];
+          if (!f) {
+            errors.push(`template="${template}" \u7F3A\u9884\u8BBE\u5B57\u6BB5 ${key}`);
+            continue;
+          }
+          if (f.controlType !== exp.controlType) errors.push(`\u9884\u8BBE\u5B57\u6BB5 ${key}.controlType \u671F\u671B ${exp.controlType}\uFF0C\u5B9E\u9645 ${f.controlType}`);
+          if (f.need !== void 0 && f.need !== exp.need) errors.push(`\u9884\u8BBE\u5B57\u6BB5 ${key}.need \u671F\u671B ${exp.need}\uFF0C\u5B9E\u9645 ${f.need}`);
+          if (exp.unique && f.unique !== true) errors.push(`\u9884\u8BBE\u5B57\u6BB5 ${key} \u5FC5\u987B unique: true`);
+          if (exp.enum && JSON.stringify(f.enum) !== JSON.stringify(exp.enum)) {
+            errors.push(`\u9884\u8BBE\u5B57\u6BB5 ${key}.enum \u671F\u671B [${exp.enum.join(",")}]\uFF0C\u5B9E\u9645 ${JSON.stringify(f.enum)}`);
+          }
+        }
+      }
+    }
+  }
+  const touchesForm = !isUpdate || payload.formSchema !== void 0 || payload.schema && payload.schema.formSchema !== void 0;
+  if (touchesForm) {
+    const schema = merged.schema || {};
+    const formSchema = schema.formSchema !== void 0 ? schema.formSchema : merged.formSchema;
+    const cols = Number(schema.formLayout && schema.formLayout.cols || merged.formLayout && merged.formLayout.cols || 3);
+    if (Array.isArray(formSchema) && formSchema.length > 0) {
+      if (![1, 2, 3].includes(cols)) {
+        errors.push(`formLayout.cols \u975E\u6CD5: ${cols}\uFF08\u5408\u6CD5 1/2/3\uFF09`);
+      } else {
+        let sum = 0;
+        formSchema.forEach((item, i) => {
+          const key = item.key;
+          const field = properties[key];
+          const span = item.colSpan ?? 1;
+          if (!(Number.isInteger(span) && span >= 1 && span <= cols)) {
+            errors.push(`formSchema[${i}](${key}) colSpan=${span} \u8D8A\u754C [1,${cols}]`);
+          }
+          if (FULLROW_CONTROL_TYPES.includes(field && field.controlType) && span !== cols) {
+            errors.push(`${key}(${field.controlType}) \u5FC5\u987B\u72EC\u5360\u6574\u884C colSpan=${cols}\uFF0C\u5B9E\u9645 ${span}`);
+          }
+          if (Object.keys(properties).length > 0 && !field) {
+            errors.push(`formSchema[${i}] \u7684 key="${key}" \u5728 schema.properties \u4E2D\u4E0D\u5B58\u5728`);
+          }
+          sum += span;
+          if (sum === cols) sum = 0;
+          else if (sum > cols) {
+            errors.push(`formSchema \u5728 ${key} \u5904\u884C\u7D2F\u52A0 ${sum} > cols=${cols}\uFF08\u6BCF\u884C colSpan \u4E4B\u548C\u5FC5\u987B\u7B49\u4E8E cols\uFF0C\u4E0D\u5141\u8BB8\u7559\u7A7A\uFF09`);
+            sum = span > cols ? 0 : span;
+          }
+        });
+        if (sum !== 0) errors.push(`formSchema \u672B\u884C\u672A\u586B\u6EE1\uFF1AcolSpan \u7D2F\u52A0\u4F59 ${sum}\uFF0C\u5E94\u4E3A 0`);
+      }
+    }
+  }
+  const touchesDevice = template === "device" && (!isUpdate || payload.device !== void 0);
+  if (touchesDevice) {
+    const device = merged.device;
+    if (!device || typeof device !== "object") {
+      errors.push("\u8BBE\u5907\u8868\u7F3A\u5C11 device \u5757\uFF08\u5FC5\u586B driver/groupId/emulator/settings/tags\uFF09");
+    } else {
+      const deviceSource = isUpdate ? payload.device || {} : device;
+      for (const legacy of DEPRECATED_DEVICE_KEYS) {
+        if (deviceSource[legacy] !== void 0) {
+          errors.push(`device.${legacy} \u5DF2\u5E9F\u5F03\uFF08\u9A71\u52A8\u5173\u8054\u53EA\u5141\u8BB8 driver/groupId\uFF09\uFF0C\u8BF7\u4ECE\u63D0\u4EA4\u4E2D\u79FB\u9664\u540E\u91CD\u8BD5`);
+        }
+      }
+      for (const k of DEVICE_REQUIRED_KEYS) {
+        if (device[k] === void 0) errors.push(`device \u5757\u7F3A\u5C11\u5FC5\u5907\u952E ${k}`);
+      }
+      const isTest = device.driver === "test";
+      if (!isTest && input.drivers) {
+        const hit = input.drivers.some(
+          (d) => d && d.driverType === device.driver && d.groupId === device.groupId && d.state === "running"
+        );
+        if (!hit) {
+          errors.push(`device.driver(${device.driver}) + groupId(${device.groupId}) \u5339\u914D\u4E0D\u5230 running \u7684\u9A71\u52A8\u5B9E\u4F8B\uFF0C\u8BF7\u5148 $K drivers \u786E\u8BA4\u5E76\u590D\u5236\u5B9E\u4F8B\u7684 driverType/groupId`);
+        }
+      }
+      if (Array.isArray(device.tags)) {
+        const seen = /* @__PURE__ */ new Set();
+        device.tags.forEach((tag, i) => {
+          const label = tag.id || `tags[${i}]`;
+          if (!tag.id) errors.push(`device.tags[${i}] \u7F3A\u5C11 id`);
+          else if (seen.has(tag.id)) errors.push(`\u70B9\u4F4D id \u91CD\u590D: ${tag.id}`);
+          seen.add(tag.id);
+          if (!tag.name) errors.push(`${label} \u7F3A\u5C11 name`);
+          if (tag.policy !== void 0 && !POLICY_ENUM.includes(tag.policy)) {
+            errors.push(`${label}.policy=${tag.policy} \u4E0D\u5728 ${POLICY_ENUM.join("/")}`);
+          }
+          if (isTest) {
+            for (const pf of PROTOCOL_TAG_FIELDS) {
+              if (tag[pf] !== void 0) errors.push(`\u6D4B\u8BD5\u9A71\u52A8\u70B9\u4F4D ${tag.id} \u4E0D\u5E94\u5305\u542B\u534F\u8BAE\u5B57\u6BB5 ${pf}\uFF08\u6D4B\u8BD5\u9A71\u52A8\u53EA\u7528 id/name/policy/unit/fixed\uFF09`);
+            }
+          }
+        });
+        if (!isTest && input.driverSchema) {
+          const { required, fields } = normalizeSchemaBlock(
+            input.driverSchema.model && input.driverSchema.model.tags || input.driverSchema.device && input.driverSchema.device.tags
+          );
+          device.tags.forEach((tag) => {
+            for (const rf of required) {
+              if (tag[rf] === void 0 || tag[rf] === null || tag[rf] === "") {
+                errors.push(`\u70B9\u4F4D ${tag.id} \u7F3A\u5C11\u9A71\u52A8\u5FC5\u586B\u5B57\u6BB5 ${rf}\uFF08\u6765\u81EA driver-schema \u7684 tags.required\uFF09`);
+                continue;
+              }
+              const def = fields[rf] || {};
+              if ((def.type === "number" || def.type === "integer") && typeof tag[rf] !== "number") {
+                errors.push(`\u70B9\u4F4D ${tag.id}.${rf} \u671F\u671B number\uFF0C\u5B9E\u9645 ${typeof tag[rf]}(${tag[rf]})`);
+              }
+              const enumVals = def.enum || (Array.isArray(def.options) ? def.options.map((o) => o && o.value !== void 0 ? o.value : o) : null);
+              if (enumVals && enumVals.length && !enumVals.includes(tag[rf]) && !enumVals.map(String).includes(String(tag[rf]))) {
+                errors.push(`\u70B9\u4F4D ${tag.id}.${rf}=${tag[rf]} \u4E0D\u5728\u5408\u6CD5\u679A\u4E3E [${enumVals.join(",")}]`);
+              }
+            }
+          });
+        }
+      }
+    }
+  }
+  return { errors, warnings: warnings2 };
+}
+
 // src/commands/table.ts
+function assertGuard(result) {
+  if (result.errors.length > 0) {
+    throw new Error(`\u8868\u7ED3\u6784\u6821\u9A8C\u5931\u8D25\uFF08${result.errors.length} \u9879\uFF0C\u5DF2\u62D2\u7EDD\u5199\u5165\uFF09\uFF1A
+  - ${result.errors.join("\n  - ")}`);
+  }
+}
 async function tablesList(options) {
   await executeCommand(async () => {
     const client = getApiClient();
@@ -21650,6 +21934,12 @@ async function tableCreate(options) {
       throw new Error("\u5B57\u6BB5\u9A8C\u8BC1\u5931\u8D25\uFF0C\u8BF7\u4FEE\u590D\u540E\u91CD\u8BD5");
     }
     const client = getApiClient();
+    assertGuard(validateTableGuard({
+      payload: data,
+      merged: data,
+      isUpdate: false,
+      ...await buildDriverContext(client, data)
+    }));
     const id = await client.saveTable(data);
     console.log(formatSuccess(`\u521B\u5EFA\u6210\u529F\uFF0C\u8868ID: ${id}`));
   });
@@ -21673,6 +21963,12 @@ async function tableUpdate(id, options) {
     if (!validationResult.valid) {
       throw new Error("\u5B57\u6BB5\u9A8C\u8BC1\u5931\u8D25\uFF0C\u8BF7\u4FEE\u590D\u540E\u91CD\u8BD5");
     }
+    assertGuard(validateTableGuard({
+      payload: partialData,
+      merged,
+      isUpdate: true,
+      ...await buildDriverContext(client, merged)
+    }));
     await client.updateTable(id, merged);
     console.log(formatSuccess("\u66F4\u65B0\u6210\u529F"));
   });
@@ -21691,6 +21987,8 @@ async function tableChangeId(oldId, newId) {
     if (!original) {
       throw new Error(`\u8868\u4E0D\u5B58\u5728: ${oldId}`);
     }
+    const idErr = tableIdError(newId);
+    if (idErr) throw new Error(idErr);
     const merged = { ...original, id: newId };
     const validationResult = validateTableFields(merged);
     const format = "text";
@@ -21704,8 +22002,67 @@ async function tableChangeId(oldId, newId) {
   });
 }
 
+// src/core/record-guard.ts
+function validateRecordData(properties, merged, touched) {
+  const errors = [];
+  const keys = touched || merged || {};
+  const legal = Object.keys(properties).filter((k) => !k.startsWith("_"));
+  for (const key of Object.keys(keys)) {
+    if (key.startsWith("_")) continue;
+    if (!(key in properties)) {
+      errors.push(`\u5B57\u6BB5 "${key}" \u4E0D\u5728\u8868 schema \u4E2D\uFF08\u5408\u6CD5\u5B57\u6BB5: ${legal.join(", ")}\uFF09\u2014\u2014\u5199\u5165\u540E\u4E0D\u4F1A\u663E\u793A\u5728\u4EFB\u4F55\u9875\u9762`);
+    }
+  }
+  for (const [key, f] of Object.entries(properties)) {
+    if (!f || typeof f !== "object") continue;
+    if (touched && !(key in touched)) continue;
+    const val = merged ? merged[key] : void 0;
+    const empty = val === void 0 || val === null || val === "";
+    if ((f.need || f.required) && empty) {
+      errors.push(`\u5FC5\u586B\u5B57\u6BB5 "${key}" \u4E3A\u7A7A`);
+      continue;
+    }
+    if (empty) continue;
+    if (Array.isArray(f.enum) && f.enum.length) {
+      const names = Array.isArray(f.enumNames) ? f.enumNames : [];
+      const ok = (v) => f.enum.includes(v) || f.enum.map(String).includes(String(v)) || names.includes(v);
+      const items = Array.isArray(val) ? val : [val];
+      for (const item of items) {
+        if (!ok(item)) {
+          errors.push(`\u5B57\u6BB5 "${key}" \u503C ${JSON.stringify(item)} \u4E0D\u5728\u679A\u4E3E [${f.enum.join(",")}${names.length ? "/" + names.join(",") : ""}]`);
+        }
+      }
+    }
+    if (f.type === "number" && typeof val !== "number") {
+      errors.push(`\u5B57\u6BB5 "${key}" \u671F\u671B number\uFF0C\u5B9E\u9645 ${typeof val}(${JSON.stringify(val)})`);
+    }
+    if (f.type === "number" && typeof val === "number" && !Number.isInteger(val)) {
+      errors.push(
+        `\u5B57\u6BB5 "${key}" \u503C ${val} \u542B\u5C0F\u6570\uFF1A\u5E73\u53F0\u4F1A\u628A number \u5B57\u6BB5\u622A\u65AD\u4E3A\u6574\u6570\u5B58\u50A8\uFF08\u5199 ${val} \u5B9E\u9645\u5B58 ${Math.trunc(val)}\uFF09\uFF0C\u62D2\u7EDD\u5199\u5165\u4EE5\u514D\u9759\u9ED8\u4E22\u7CBE\u5EA6\u2014\u2014\u8BF7\u6539\u7528\u6574\u6570\uFF0C\u6216\u4E0E\u5E73\u53F0\u65B9\u786E\u8BA4\u5C0F\u6570\u652F\u6301\u540E\u518D\u5199`
+      );
+    }
+  }
+  return errors;
+}
+
 // src/commands/record.ts
 var import_node_fs2 = require("node:fs");
+async function assertRecordValid(client, tableName, merged, touched) {
+  let table;
+  try {
+    table = await client.getTableById(tableName);
+  } catch {
+    return;
+  }
+  const schemaBlock = table && table.schema && typeof table.schema === "object" ? table.schema : table;
+  const properties = schemaBlock && schemaBlock.properties;
+  if (!properties || typeof properties !== "object" || Object.keys(properties).length === 0) return;
+  const errors = validateRecordData(properties, merged, touched);
+  if (errors.length > 0) {
+    throw new Error(`\u8BB0\u5F55\u6821\u9A8C\u5931\u8D25\uFF08${errors.length} \u9879\uFF0C\u5DF2\u62D2\u7EDD\u5199\u5165 ${tableName}\uFF09\uFF1A
+  - ${errors.join("\n  - ")}`);
+  }
+}
 async function recordsList(tableName, options) {
   await executeCommand(async () => {
     const client = getApiClient();
@@ -21727,15 +22084,16 @@ async function recordCreate(tableName, options) {
   await executeCommand(async () => {
     let data;
     if (options.file) {
-      data = JSON.parse((0, import_node_fs2.readFileSync)(options.file, "utf-8"));
+      data = parseJsonOption((0, import_node_fs2.readFileSync)(options.file, "utf-8"));
     } else if (options.json) {
-      data = JSON.parse(options.json);
-    } else if (options.data) {
-      data = JSON.parse(options.data);
+      data = parseJsonOption(options.json);
+    } else if (parseKvData(options.data) !== void 0) {
+      data = parseKvData(options.data);
     } else {
       throw new Error("\u8BF7\u63D0\u4F9B --file, --json \u6216 --data \u53C2\u6570");
     }
     const client = getApiClient();
+    await assertRecordValid(client, tableName, data);
     const id = await client.saveTableRecord(tableName, data, options.upsert);
     console.log(formatSuccess(`\u521B\u5EFA\u6210\u529F\uFF0C\u8BB0\u5F55ID: ${id}`));
   });
@@ -21744,17 +22102,19 @@ async function recordUpdate(tableName, id, options) {
   await executeCommand(async () => {
     let partialData;
     if (options.file) {
-      partialData = JSON.parse((0, import_node_fs2.readFileSync)(options.file, "utf-8"));
+      partialData = parseJsonOption((0, import_node_fs2.readFileSync)(options.file, "utf-8"));
     } else if (options.json) {
-      partialData = JSON.parse(options.json);
-    } else if (options.data) {
-      partialData = JSON.parse(options.data);
+      partialData = parseJsonOption(options.json);
+    } else if (parseKvData(options.data) !== void 0) {
+      partialData = parseKvData(options.data);
     } else {
       throw new Error("\u8BF7\u63D0\u4F9B --file, --json \u6216 --data \u53C2\u6570");
     }
     const client = getApiClient();
     const original = await client.getTableRecordById(tableName, id);
+    if (!original || !original.id) throw new Error(`\u8BB0\u5F55\u4E0D\u5B58\u5728: ${tableName}/${id}`);
     const merged = deepMerge(original, partialData);
+    await assertRecordValid(client, tableName, merged, partialData);
     await client.updateTableRecord(tableName, id, merged);
     console.log(formatSuccess("\u66F4\u65B0\u6210\u529F"));
   });
@@ -21879,12 +22239,19 @@ async function warningRulesGet(id, options) {
     console.log(formatOutput(result, format));
   });
 }
+function parseRuleLevel(raw) {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 4) {
+    throw new Error(`\u62A5\u8B66\u7EA7\u522B level \u5FC5\u987B\u662F 1-4 \u6574\u6570\uFF081\u63D0\u793A/2\u4E00\u822C/3\u91CD\u8981/4\u4E25\u91CD\uFF09\uFF0C\u6536\u5230: "${raw}"`);
+  }
+  return n;
+}
 async function warningRulesCreate(options) {
   await executeCommand(async () => {
     const client = getApiClient();
     const data = {
       name: options.name,
-      level: Number(options.level),
+      level: parseRuleLevel(options.level),
       enable: options.enable !== "false",
       description: options.description
     };
@@ -21896,9 +22263,10 @@ async function warningRulesUpdate(id, options) {
   await executeCommand(async () => {
     const client = getApiClient();
     const original = await client.getWarningRuleById(id);
+    if (!original) throw new Error(`\u62A5\u8B66\u89C4\u5219\u4E0D\u5B58\u5728: ${id}`);
     const partialData = {};
     if (options.name !== void 0) partialData.name = options.name;
-    if (options.level !== void 0) partialData.level = Number(options.level);
+    if (options.level !== void 0) partialData.level = parseRuleLevel(options.level);
     if (options.enable !== void 0) partialData.enable = options.enable !== "false";
     if (options.description !== void 0) partialData.description = options.description;
     const merged = deepMerge(original, partialData);
@@ -22223,7 +22591,6 @@ async function driverCreate(options) {
       stopAcquisition: false,
       autoUpdateConfig: false,
       debug: false,
-      description: options.description || "",
       state: "none",
       device: { tags: [], commands: [], events: [], settings: {} }
     };
@@ -22542,6 +22909,33 @@ async function driverUpdateConfig(id, options) {
     const instance = await client.getDriverInstanceById(id);
     if (!instance) throw new Error(`\u9A71\u52A8\u5B9E\u4F8B '${id}' \u4E0D\u5B58\u5728`);
     const mergedDevice = deepMerge(instance.device || {}, incomingDevice);
+    let schema;
+    try {
+      schema = await client.getDriverSchema(instance.driverType);
+    } catch {
+      schema = void 0;
+    }
+    if (schema) {
+      const driverProps = schema.driver?.properties || {};
+      const zh = { tags: "\u6570\u636E\u70B9", commands: "\u6307\u4EE4", events: "\u4E8B\u4EF6" };
+      const notAllowed = ["tags", "commands", "events"].filter(
+        (k) => Array.isArray(incomingDevice[k]) && incomingDevice[k].length > 0 && !driverProps[k]
+      );
+      if (notAllowed.length > 0) {
+        throw new Error(
+          `\u5DF2\u62D2\u7EDD\u5199\u5165\uFF1A\u9A71\u52A8 "${instance.driverType}" \u7684\u914D\u7F6E\uFF08driver \u5757\uFF09\u6CA1\u6709 ${notAllowed.map((k) => zh[k]).join("/")}\u5B9A\u4E49\u2014\u2014\u5B83\u4EEC\u5C5E\u4E8E\u6A21\u578B/\u8BBE\u5907\u5C42\uFF0C\u4E0D\u5728\u9A71\u52A8\u5B9E\u4F8B\u4E0A\u914D\u7F6E\uFF08\u524D\u7AEF\u9A71\u52A8\u914D\u7F6E\u9875\u540C\u6837\u4E0D\u663E\u793A\uFF0C\u5199\u5165\u4E0D\u4F1A\u751F\u6548\u4E8E\u4EFB\u4F55\u9875\u9762\uFF09\u3002\u6B63\u786E\u505A\u6CD5\uFF1A\u4ECE\u914D\u7F6E\u4E2D\u79FB\u9664\u540E\u91CD\u8BD5\uFF08settings \u7167\u5E38\u4FDD\u5B58\uFF09\uFF0C\u5E76\u5728\u6700\u7EC8\u62A5\u544A\u5982\u5B9E\u8BF4\u660E\u3002`
+        );
+      }
+      const { required: settingsRequired, fields: settingsProps } = normalizeSchemaBlock(driverProps.settings);
+      const missing = settingsRequired.filter(
+        (f) => settingsProps[f]?.default === void 0 && (mergedDevice.settings?.[f] === void 0 || mergedDevice.settings?.[f] === null || mergedDevice.settings?.[f] === "")
+      );
+      if (missing.length > 0) {
+        throw new Error(
+          `\u5DF2\u62D2\u7EDD\u5199\u5165\uFF1A\u5FC5\u586B\u914D\u7F6E\u7F3A\u5931\u2014\u2014settings \u7F3A\u5C11\u5FC5\u586B\u5B57\u6BB5 ${missing.join(", ")}\uFF08schema driver \u5757 required \u4E14\u65E0\u9ED8\u8BA4\u503C\uFF09\u3002\u8BF7\u6309\u4EFB\u52A1\u4E8B\u5B9E\u6620\u5C04\u6216\u884C\u4E1A\u901A\u7528\u9ED8\u8BA4\u503C\u8865\u5168\uFF08\u5728\u62A5\u544A\u4E2D\u6CE8\u660E\u5047\u8BBE\uFF09\u540E\u91CD\u8BD5\u3002`
+        );
+      }
+    }
     await client.updateDriverInstance(id, { device: mergedDevice });
     console.log(formatOutput(
       {
@@ -22949,6 +23343,16 @@ async function seed(options) {
       console.error(`[${i + 1}/${data.tables.length}] \u521B\u5EFA\u8868: ${tableSchema.title || tableSchema.id}`);
       let tableId;
       try {
+        const guard = validateTableGuard({
+          payload: tableSchema,
+          merged: tableSchema,
+          isUpdate: false,
+          ...await buildDriverContext(client, tableSchema)
+        });
+        if (guard.errors.length > 0) {
+          throw new Error(`\u8868\u7ED3\u6784\u6821\u9A8C\u5931\u8D25\uFF08${guard.errors.length} \u9879\uFF09:
+  - ${guard.errors.join("\n  - ")}`);
+        }
         tableId = await client.saveTable(tableSchema);
         console.error(`  \u2713 \u8868\u5DF2\u521B\u5EFA, ID: ${tableId}`);
       } catch (err) {
@@ -22957,10 +23361,15 @@ async function seed(options) {
         continue;
       }
       const recordResults = { table: tableSchema.id, tableId, records: [] };
+      const seedProps = tableSchema.schema && tableSchema.schema.properties || {};
       if (table.records && table.records.length > 0) {
         for (let j = 0; j < table.records.length; j++) {
           const record = table.records[j];
           try {
+            if (seedProps && Object.keys(seedProps).length > 0) {
+              const errs = validateRecordData(seedProps, record);
+              if (errs.length > 0) throw new Error(`\u8BB0\u5F55\u6821\u9A8C\u5931\u8D25: ${errs.join("; ")}`);
+            }
             const recordId = await client.saveTableRecord(tableSchema.id, record);
             recordResults.records.push({ index: j, id: recordId, status: "ok" });
           } catch (err) {
@@ -22992,8 +23401,8 @@ program2.command("table-change-id <oldId> <newId>").description("\u4FEE\u6539\u8
 program2.command("table-delete <id>").description("\u5220\u9664\u8868").action(tableDelete);
 addOutput(program2.command("records <table>").alias("rec").description("\u67E5\u8BE2\u8BB0\u5F55").option("-f, --filter <json>", "\u8FC7\u6EE4\u6761\u4EF6").option("-s, --sort <json>", "\u6392\u5E8F").option("-l, --limit <number>", "\u6570\u91CF\u9650\u5236", "50").option("--skip <number>", "\u8DF3\u8FC7\u6570\u91CF").option("--with-count", "\u8FD4\u56DE\u603B\u6570")).action(recordsList);
 addOutput(program2.command("record <table> <id>").description("\u83B7\u53D6\u5355\u6761\u8BB0\u5F55")).action(recordGet);
-program2.command("record-create <table>").description("\u521B\u5EFA\u8BB0\u5F55").option("--file <path>", "\u4ECE JSON \u6587\u4EF6\u8BFB\u53D6").option("--json <json>", "JSON \u6570\u636E").option("--data <json>", "JSON \u6570\u636E\uFF08\u522B\u540D\uFF09").option("--upsert", "\u5B58\u5728\u5219\u66F4\u65B0").action(recordCreate);
-program2.command("record-update <table> <id>").description("\u66F4\u65B0\u8BB0\u5F55").option("--file <path>", "\u4ECE JSON \u6587\u4EF6\u8BFB\u53D6").option("--json <json>", "JSON \u6570\u636E").option("--data <json>", "JSON \u6570\u636E\uFF08\u522B\u540D\uFF09").action(recordUpdate);
+program2.command("record-create <table>").description("\u521B\u5EFA\u8BB0\u5F55").option("--file <path>", "\u4ECE JSON \u6587\u4EF6\u8BFB\u53D6").option("--json <json>", "JSON \u6570\u636E").option("--data <key=value>", "key=value \u6570\u636E\uFF08\u53EF\u91CD\u590D\u4F20\u591A\u4E2A\uFF1B\u4E5F\u63A5\u53D7\u6574\u6BB5 JSON\uFF09", (v, p) => p.concat(v), []).option("--upsert", "\u5B58\u5728\u5219\u66F4\u65B0").action(recordCreate);
+program2.command("record-update <table> <id>").description("\u66F4\u65B0\u8BB0\u5F55").option("--file <path>", "\u4ECE JSON \u6587\u4EF6\u8BFB\u53D6").option("--json <json>", "JSON \u6570\u636E").option("--data <key=value>", "key=value \u6570\u636E\uFF08\u53EF\u91CD\u590D\u4F20\u591A\u4E2A\uFF1B\u4E5F\u63A5\u53D7\u6574\u6BB5 JSON\uFF09", (v, p) => p.concat(v), []).action(recordUpdate);
 program2.command("record-change-id <table> <oldId> <newId>").description("\u4FEE\u6539\u8BB0\u5F55\u6807\u8BC6\uFF08\u26A0\uFE0F \u5220\u9664\u91CD\u5EFA\u8BED\u4E49\uFF0C\u5F15\u7528\u4E0D\u81EA\u52A8\u8FC1\u79FB\uFF0C\u4E0D\u53EF\u6062\u590D\uFF09").action(recordChangeId);
 program2.command("record-delete <table> <id>").description("\u5220\u9664\u8BB0\u5F55").option("--attachment", "\u7EA7\u8054\u5220\u9664\u9644\u4EF6").action(recordDelete);
 program2.command("records-batch-delete <table> <ids...>").description("\u6279\u91CF\u5220\u9664\u8BB0\u5F55").action(recordsBatchDelete);
@@ -23032,10 +23441,10 @@ addOutput(program2.command("users").description("\u7528\u6237\u5217\u8868").opti
 addOutput(program2.command("drivers").description("\u9A71\u52A8\u5B9E\u4F8B\u5217\u8868")).action(driversList);
 addOutput(program2.command("driver <id>").description("\u9A71\u52A8\u5B9E\u4F8B\u8BE6\u60C5")).action(driverGet);
 addOutput(program2.command("driver-catalog").description("\u9A71\u52A8\u76EE\u5F55\uFF08\u53EF\u5B89\u88C5\u9A71\u52A8\u5217\u8868\uFF0C\u542B\u5DF2\u5B89\u88C5\u6CE8\u8BB0\uFF09").option("--search <keyword>", "\u5173\u952E\u8BCD\u8FC7\u6EE4\uFF08\u5339\u914D key/\u63CF\u8FF0/\u5206\u7C7B\uFF09")).action(driverCatalog);
-program2.command("driver-create").description("\u521B\u5EFA\u9A71\u52A8\u5B9E\u4F8B\uFF08-t \u586B\u9A71\u52A8 key\uFF0C\u5373 driver-catalog \u7684 name \u5B57\u6BB5\uFF09").requiredOption("-n, --name <name>", "\u5B9E\u4F8B\u540D\u79F0\uFF08\u552F\u4E00\uFF09").option("-t, --type <driverKey>", "\u9A71\u52A8 key\uFF08--run-mode node \u53EF\u7701\u7565\uFF0C\u81EA\u52A8\u7EE7\u627F --cluster \u96C6\u7FA4\u7684\u9A71\u52A8\u7C7B\u578B\uFF09").option("--version <version>", "\u9A71\u52A8\u7248\u672C\uFF08\u7F3A\u7701\u4ECE\u76EE\u5F55\u89E3\u6790\uFF09").option("--run-mode <mode>", "\u8FD0\u884C\u6A21\u5F0F: one | cluster | node", "one").option("--cluster <clusterInstanceId>", "\u96C6\u7FA4\u5B9E\u4F8B id\uFF08\u4EC5 --run-mode node \u65F6\u5FC5\u586B\uFF1A\u7EE7\u627F\u5176 driverType\uFF0C\u5E76\u628A\u5176 groupId \u5B58\u4E0A\uFF09").option("--distributed <mode>", "\u5206\u914D\u65B9\u5F0F: all | average | lazy", "all").option("-d, --description <text>", "\u63CF\u8FF0").option("--file <path>", "\u5B8C\u6574 payload JSON \u6587\u4EF6\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").option("--json <json>", "\u5B8C\u6574 payload JSON\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").action(driverCreate);
+program2.command("driver-create").description("\u521B\u5EFA\u9A71\u52A8\u5B9E\u4F8B\uFF08-t \u586B\u9A71\u52A8 key\uFF0C\u5373 driver-catalog \u7684 name \u5B57\u6BB5\uFF09").requiredOption("-n, --name <name>", "\u5B9E\u4F8B\u540D\u79F0\uFF08\u552F\u4E00\uFF09").option("-t, --type <driverKey>", "\u9A71\u52A8 key\uFF08--run-mode node \u53EF\u7701\u7565\uFF0C\u81EA\u52A8\u7EE7\u627F --cluster \u96C6\u7FA4\u7684\u9A71\u52A8\u7C7B\u578B\uFF09").option("--version <version>", "\u9A71\u52A8\u7248\u672C\uFF08\u7F3A\u7701\u4ECE\u76EE\u5F55\u89E3\u6790\uFF09").option("--run-mode <mode>", "\u8FD0\u884C\u6A21\u5F0F: one | cluster | node", "one").option("--cluster <clusterInstanceId>", "\u96C6\u7FA4\u5B9E\u4F8B id\uFF08\u4EC5 --run-mode node \u65F6\u5FC5\u586B\uFF1A\u7EE7\u627F\u5176 driverType\uFF0C\u5E76\u628A\u5176 groupId \u5B58\u4E0A\uFF09").option("--distributed <mode>", "\u5206\u914D\u65B9\u5F0F: all | average | lazy", "all").option("--file <path>", "\u5B8C\u6574 payload JSON \u6587\u4EF6\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").option("--json <json>", "\u5B8C\u6574 payload JSON\uFF08\u4E0E flags \u6DF1\u5408\u5E76\uFF09").action(driverCreate);
 addOutput(program2.command("driver-install <instanceId>").description("\u5B89\u88C5\u9A71\u52A8\uFF08\u9ED8\u8BA4\u963B\u585E\u7B49\u5F85\u5230\u5B8C\u6210\uFF0C\u8FDB\u5EA6\u8D70 stderr\uFF09").option("--url <url>", "\u5B89\u88C5\u5305\u5730\u5740\uFF08\u7F3A\u7701\u4ECE\u9A71\u52A8\u76EE\u5F55\u89E3\u6790\uFF09").option("--no-wait", "\u53EA\u89E6\u53D1\u5B89\u88C5\uFF0C\u7ACB\u5373\u8FD4\u56DE taskId").option("--timeout <seconds>", "\u7B49\u5F85\u8D85\u65F6\uFF08\u79D2\uFF09", "300").option("--interval <seconds>", "\u8F6E\u8BE2\u95F4\u9694\uFF08\u79D2\uFF09", "2")).action(driverInstall);
 addOutput(program2.command("driver-install-info <taskId>").description("\u67E5\u8BE2\u5B89\u88C5\u8FDB\u5EA6\uFF08--no-wait / \u8D85\u65F6\u540E\u7EED\u67E5\u7528\uFF09")).action(driverInstallInfo);
-program2.command("driver-update-config <instanceId>").description("\u66F4\u65B0\u9A71\u52A8\u914D\u7F6E\uFF08device \u5757: settings/tags/commands/events\uFF0C\u6DF1\u5408\u5E76\uFF09").option("--file <path>", "\u914D\u7F6E JSON \u6587\u4EF6").option("--json <json>", "\u914D\u7F6E JSON \u6570\u636E").action(driverUpdateConfig);
+program2.command("driver-update-config <instanceId>").description("\u66F4\u65B0\u9A71\u52A8\u914D\u7F6E\uFF08device \u5757: settings/tags/commands/events\uFF0C\u6DF1\u5408\u5E76\uFF1Bdriver \u5757\u65E0 tags \u5B9A\u4E49\u7684\u9A71\u52A8\u62D2\u5199 tags\uFF09").option("--file <path>", "\u914D\u7F6E JSON \u6587\u4EF6").option("--json <json>", "\u914D\u7F6E JSON \u6570\u636E").action(driverUpdateConfig);
 addOutput(program2.command("driver-restart <instanceId>").description("\u91CD\u542F\u9A71\u52A8\uFF08\u914D\u7F6E\u53D8\u66F4\u540E\u751F\u6548\uFF09\uFF0C\u9ED8\u8BA4\u8F6E\u8BE2 state \u5230 running").option("--no-wait", "\u4E0D\u7B49\u5F85 running")).action(driverRestart);
 program2.command("driver-delete <instanceId>").description("\u5220\u9664\u9A71\u52A8\u5B9E\u4F8B\uFF08\u4F1A\u4F7F\u5176\u7ED1\u5B9A\u7684\u8BBE\u5907\u8868\u5931\u6548\uFF09").action(driverDelete);
 addOutput(program2.command("driver-schema <driverType>").description("\u83B7\u53D6\u9A71\u52A8 schema\uFF08\u70B9\u4F4D\u5B57\u6BB5\u3001settings \u914D\u7F6E\u7B49\uFF09")).action(driverSchema);

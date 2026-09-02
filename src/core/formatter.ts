@@ -87,10 +87,13 @@ function formatPlain(data: any): string {
   return String(data);
 }
 
+// NO_COLOR 约定（https://no-color.org）：设置时输出纯文本，便于程序化消费（评测/管道解析）
+const noColor = !!process.env.NO_COLOR;
+
 export function formatError(message: string): string {
-  return `\x1b[31m✗ ${message}\x1b[0m`;
+  return noColor ? `✗ ${message}` : `\x1b[31m✗ ${message}\x1b[0m`;
 }
 
 export function formatSuccess(message: string): string {
-  return `\x1b[32m✓ ${message}\x1b[0m`;
+  return noColor ? `✓ ${message}` : `\x1b[32m✓ ${message}\x1b[0m`;
 }

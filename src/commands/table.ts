@@ -2,6 +2,13 @@ import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputForma
 import { formatOutput, formatSuccess } from '../core/formatter.js';
 import { readFileSync } from 'node:fs';
 import { validateTableFields, formatValidationResult } from '../core/field-validator.js';
+import { validateTableGuard, tableIdError, buildDriverContext } from '../core/table-guard.js';
+
+function assertGuard(result: { errors: string[] }): void {
+  if (result.errors.length > 0) {
+    throw new Error(`表结构校验失败（${result.errors.length} 项，已拒绝写入）：\n  - ${result.errors.join('\n  - ')}`);
+  }
+}
 
 export async function tablesList(options: any): Promise<void> {
   await executeCommand(async () => {
@@ -45,8 +52,17 @@ export async function tableCreate(options: any): Promise<void> {
       throw new Error('字段验证失败，请修复后重试');
     }
 
-    // 验证通过，继续创建
     const client = getApiClient();
+
+    // 不变量门禁（写前拦截）：template↔function 配对、模板预设字段、formSchema 行满、device 块驱动关联/tags
+    assertGuard(validateTableGuard({
+      payload: data,
+      merged: data,
+      isUpdate: false,
+      ...(await buildDriverContext(client, data)),
+    }));
+
+    // 验证通过，继续创建
     const id = await client.saveTable(data);
     console.log(formatSuccess(`创建成功，表ID: ${id}`));
   });
@@ -83,6 +99,14 @@ export async function tableUpdate(id: string, options: any): Promise<void> {
       throw new Error('字段验证失败，请修复后重试');
     }
 
+    // 3️⃣ 不变量门禁：只校验本次提交触及的部分（template/function、schema.properties、formSchema、device 块）
+    assertGuard(validateTableGuard({
+      payload: partialData,
+      merged,
+      isUpdate: true,
+      ...(await buildDriverContext(client, merged)),
+    }));
+
     // 4️⃣ 调用更新接口
     await client.updateTable(id, merged);
     console.log(formatSuccess('更新成功'));
@@ -111,6 +135,8 @@ export async function tableChangeId(oldId: string, newId: string): Promise<void>
     if (!original) {
       throw new Error(`表不存在: ${oldId}`);
     }
+    const idErr = tableIdError(newId);
+    if (idErr) throw new Error(idErr);
 
     // 2️⃣ 覆盖 id，先按 table-update 同样口径校验合并后的完整数据
     const merged = { ...original, id: newId };

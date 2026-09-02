@@ -126,7 +126,7 @@
 | 属性 | 类型 | 说明 |
 |------|------|------|
 | `key` | string | 字段标识符 |
-| `type` | string | JSON 类型：`string` / `number` / `boolean` / `object` / `array` |
+| `type` | string | JSON 类型：`string` / `number` / `boolean` / `object` / `array`。⚠️ `number` 字段平台只存整数（小数会被截断，CLI 写入小数时直接拦截） |
 | `controlType` | string | 控件类型，详见 [controls/](controls/) |
 | `title` | string | 显示名称 |
 | `need` | boolean | 是否必填 |
@@ -159,11 +159,7 @@
 
 ### colSpan（字段宽度）
 
-formSchema 每项可设 `colSpan`，值为 1 到 cols。
-
-⚠️ **核心规则：**
-1. **每行的 colSpan 之和必须等于 cols**，不允许出现空白区域
-2. **以下控件 colSpan 必须等于 cols（始终独占一整行）**：`rich-text`、`editable-table`、`map`
+formSchema 每项可设 `colSpan`，值为 1 到 cols。CLI 写前校验并直接拒绝：每行 colSpan 之和 ≠ cols（不允许空白区域）、`rich-text`/`editable-table`/`map` 必须独占整行（=cols）。
 
 ```json
 "formLayout": { "cols": 3, "labelLayout": "vertical" },

@@ -42,7 +42,6 @@ export async function driverCreate(options: any): Promise<void> {
       stopAcquisition: false,
       autoUpdateConfig: false,
       debug: false,
-      description: options.description || '',
       state: 'none',
       device: { tags: [], commands: [], events: [], settings: {} },
     };

@@ -136,10 +136,12 @@ function validateField(field: any, index?: number): ValidationResult {
     return { valid: false, errors, warnings };
   }
 
-  // 检查常见错误：使用 'select' 或 'relate' 而非完整的类型
+  // 检查常见错误：使用 'select' 而非完整的类型
   // 由于 TypeScript 类型检查，我们需要用字符串包含来判断
+  // 注意：'relate'（单选关联）本身是完整的合法类型（见 VALID_CONTROL_TYPES 与 controls/relate.md），
+  // 缺少 relate 配置的场景由下方 requiredProps 校验覆盖，这里不拦
   const controlTypeStr = String(controlType);
-  if (controlTypeStr === 'select' || controlTypeStr === 'relate') {
+  if (controlTypeStr === 'select') {
     errors.push({
       field: field.key || field.identifier,
       type: 'error',
@@ -186,7 +188,7 @@ function validateField(field: any, index?: number): ValidationResult {
     }
   }
 
-  // 特殊验证：选择器的 enum 必须是非空数组
+  // 特殊验证：选择器的 enum 必须是非空数组，且与 enumNames 一一对应
   if (controlType.startsWith('select-') && field.enum) {
     if (!Array.isArray(field.enum)) {
       errors.push({
@@ -201,6 +203,13 @@ function validateField(field: any, index?: number): ValidationResult {
         type: 'error',
         message: `${fieldPath}: enum 不能为空数组`,
         path: 'enum'
+      });
+    } else if (!Array.isArray(field.enumNames) || field.enumNames.length !== field.enum.length) {
+      errors.push({
+        field: field.key || field.identifier,
+        type: 'error',
+        message: `${fieldPath}: select-* 必须提供 enumNames 且与 enum 等长一一对应（enum ${field.enum.length} 项）`,
+        path: 'enumNames'
       });
     }
   }
@@ -227,16 +236,21 @@ export function validateTableFields(data: any): ValidationResult {
     return { valid: false, errors, warnings };
   }
 
-  // 获取字段列表
-  const fields = data.fieldSchema || data.fields || [];
-
-  if (!Array.isArray(fields)) {
-    errors.push({
-      type: 'error',
-      message: 'fieldSchema 不是数组',
-      path: 'fieldSchema'
-    });
-    return { valid: false, errors, warnings };
+  // 获取字段列表：优先平台真实形状 schema.properties（key→字段定义的对象映射），兼容旧数组形态 fieldSchema/fields
+  let fields: any[];
+  if (data.schema?.properties && typeof data.schema.properties === 'object' && !Array.isArray(data.schema.properties)) {
+    fields = Object.entries(data.schema.properties).map(([k, v]: [string, any]) => ({ key: k, ...v }));
+  } else {
+    const raw = data.fieldSchema || data.fields || [];
+    if (!Array.isArray(raw)) {
+      errors.push({
+        type: 'error',
+        message: 'fieldSchema 不是数组',
+        path: 'fieldSchema'
+      });
+      return { valid: false, errors, warnings };
+    }
+    fields = raw;
   }
 
   if (fields.length === 0) {

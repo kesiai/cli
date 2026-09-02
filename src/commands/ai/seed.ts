@@ -1,5 +1,7 @@
 import { getApiClient, executeCommand } from '../../core/utils.js';
 import { formatSuccess } from '../../core/formatter.js';
+import { validateTableGuard, buildDriverContext } from '../../core/table-guard.js';
+import { validateRecordData } from '../../core/record-guard.js';
 import { readFileSync } from 'node:fs';
 
 interface SeedData {
@@ -105,6 +107,16 @@ export async function seed(options: any): Promise<void> {
       // 创建表
       let tableId: string;
       try {
+        // 不变量门禁（与 table-create 同口径）：template 配对/预设字段/formSchema 行满/device 块
+        const guard = validateTableGuard({
+          payload: tableSchema,
+          merged: tableSchema,
+          isUpdate: false,
+          ...(await buildDriverContext(client, tableSchema)),
+        });
+        if (guard.errors.length > 0) {
+          throw new Error(`表结构校验失败（${guard.errors.length} 项）:\n  - ${guard.errors.join('\n  - ')}`);
+        }
         tableId = await client.saveTable(tableSchema);
         console.error(`  ✓ 表已创建, ID: ${tableId}`);
       } catch (err: any) {
@@ -113,12 +125,17 @@ export async function seed(options: any): Promise<void> {
         continue;
       }
 
-      // 灌入记录
+      // 灌入记录（值级门禁按 seed 文件内的 schema.properties 校验，零额外查询）
       const recordResults: any = { table: tableSchema.id, tableId, records: [] };
+      const seedProps = (tableSchema.schema && tableSchema.schema.properties) || {};
       if (table.records && table.records.length > 0) {
         for (let j = 0; j < table.records.length; j++) {
           const record = table.records[j];
           try {
+            if (seedProps && Object.keys(seedProps).length > 0) {
+              const errs = validateRecordData(seedProps, record);
+              if (errs.length > 0) throw new Error(`记录校验失败: ${errs.join('; ')}`);
+            }
             const recordId = await client.saveTableRecord(tableSchema.id, record);
             recordResults.records.push({ index: j, id: recordId, status: 'ok' });
           } catch (err: any) {

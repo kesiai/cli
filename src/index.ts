@@ -104,7 +104,7 @@ program
   .description('创建记录')
   .option('--file <path>', '从 JSON 文件读取')
   .option('--json <json>', 'JSON 数据')
-  .option('--data <json>', 'JSON 数据（别名）')
+  .option('--data <key=value>', 'key=value 数据（可重复传多个；也接受整段 JSON）', (v: string, p: string[]) => p.concat(v), [] as string[])
   .option('--upsert', '存在则更新')
   .action(record.recordCreate);
 
@@ -113,7 +113,7 @@ program
   .description('更新记录')
   .option('--file <path>', '从 JSON 文件读取')
   .option('--json <json>', 'JSON 数据')
-  .option('--data <json>', 'JSON 数据（别名）')
+  .option('--data <key=value>', 'key=value 数据（可重复传多个；也接受整段 JSON）', (v: string, p: string[]) => p.concat(v), [] as string[])
   .action(record.recordUpdate);
 
 program
@@ -265,7 +265,6 @@ program.command('driver-create')
   .option('--run-mode <mode>', '运行模式: one | cluster | node', 'one')
   .option('--cluster <clusterInstanceId>', '集群实例 id（仅 --run-mode node 时必填：继承其 driverType，并把其 groupId 存上）')
   .option('--distributed <mode>', '分配方式: all | average | lazy', 'all')
-  .option('-d, --description <text>', '描述')
   .option('--file <path>', '完整 payload JSON 文件（与 flags 深合并）')
   .option('--json <json>', '完整 payload JSON（与 flags 深合并）')
   .action(driver.driverCreate);
@@ -283,7 +282,7 @@ addOutput(program.command('driver-install-info <taskId>')
   .action(driverInstall.driverInstallInfo);
 
 program.command('driver-update-config <instanceId>')
-  .description('更新驱动配置（device 块: settings/tags/commands/events，深合并）')
+  .description('更新驱动配置（device 块: settings/tags/commands/events，深合并；driver 块无 tags 定义的驱动拒写 tags）')
   .option('--file <path>', '配置 JSON 文件')
   .option('--json <json>', '配置 JSON 数据')
   .action(driverUpdateConfig.driverUpdateConfig);

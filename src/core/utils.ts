@@ -16,16 +16,18 @@ export async function executeCommand(fn: () => Promise<void>): Promise<void> {
   try {
     await fn();
   } catch (err: any) {
+    const red = process.env.NO_COLOR ? '' : '\x1b[31m';
+    const reset = process.env.NO_COLOR ? '' : '\x1b[0m';
     if (err?.code === 'CONFIG_ERROR') {
-      console.error(`\x1b[31m✗ ${err.message}\x1b[0m`);
+      console.error(`${red}✗ ${err.message}${reset}`);
     } else if (err?.code === 'AUTH_ERROR') {
-      console.error(`\x1b[31m✗ 认证失败: ${err.message}\x1b[0m`);
+      console.error(`${red}✗ 认证失败: ${err.message}${reset}`);
     } else if (err?.code === 'API_ERROR') {
-      console.error(`\x1b[31m✗ API 错误 (${err.statusCode}): ${err.message}\x1b[0m`);
+      console.error(`${red}✗ API 错误 (${err.statusCode}): ${err.message}${reset}`);
     } else if (err?.code === 'NETWORK_ERROR') {
-      console.error(`\x1b[31m✗ 网络错误: ${err.message}\x1b[0m`);
+      console.error(`${red}✗ 网络错误: ${err.message}${reset}`);
     } else {
-      console.error(`\x1b[31m✗ ${err?.message || err}\x1b[0m`);
+      console.error(`${red}✗ ${err?.message || err}${reset}`);
     }
     process.exit(1);
   }
@@ -38,6 +40,41 @@ export function parseJsonOption(value: string | undefined): any {
   } catch {
     throw new Error(`无效的 JSON: ${value}`);
   }
+}
+
+/**
+ * 解析 --data 的 key=value 形式（可重复传多个合并为一个对象；单个以 { 开头的按整段 JSON 解析）。
+ * 值做类型推断：true/false/null → 字面量，纯数字 → number，其余保持字符串。
+ */
+export function parseKvData(values: string[] | string | undefined): any {
+  const list = Array.isArray(values) ? values : values !== undefined ? [values] : [];
+  if (list.length === 0) return undefined;
+  if (list.length === 1 && list[0].trimStart().startsWith('{')) {
+    return parseJsonOption(list[0]);
+  }
+  const out: Record<string, any> = {};
+  const put = (pair: string) => {
+    const eq = pair.indexOf('=');
+    if (eq <= 0) {
+      throw new Error(`--data 格式为 key=value（多个用 --data 重复传或 & 连接，或传整段 JSON）: "${pair}"`);
+    }
+    const key = pair.slice(0, eq).trim();
+    const raw = pair.slice(eq + 1);
+    out[key] = raw === 'true' ? true : raw === 'false' ? false : raw === 'null' ? null
+      : (raw !== '' && !isNaN(Number(raw)) ? Number(raw) : raw);
+  };
+  for (const item of list) {
+    // 兼容 & 连接写法（'a=1&b=2'）：每个分段都含 = 才拆，否则视为值中含 & 的单个 kv
+    if (item.includes('&')) {
+      const segs = item.split('&');
+      if (segs.every((s) => s.indexOf('=') > 0)) {
+        segs.forEach(put);
+        continue;
+      }
+    }
+    put(item);
+  }
+  return out;
 }
 
 export function normalizeQueryOptions(options: any): Record<string, any> {

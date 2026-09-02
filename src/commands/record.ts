@@ -1,6 +1,24 @@
-import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputFormat, deepMerge } from '../core/utils.js';
+import { getApiClient, executeCommand, normalizeQueryOptions, resolveOutputFormat, deepMerge, parseJsonOption, parseKvData } from '../core/utils.js';
 import { formatOutput, formatSuccess } from '../core/formatter.js';
+import { validateRecordData } from '../core/record-guard.js';
 import { readFileSync } from 'node:fs';
+
+/** 值级门禁：按表 schema 的 properties 校验记录数据（表查不到/无字段定义时放行） */
+async function assertRecordValid(client: any, tableName: string, merged: any, touched?: any): Promise<void> {
+  let table: any;
+  try {
+    table = await client.getTableById(tableName);
+  } catch {
+    return;
+  }
+  const schemaBlock = table && table.schema && typeof table.schema === 'object' ? table.schema : table;
+  const properties = schemaBlock && schemaBlock.properties;
+  if (!properties || typeof properties !== 'object' || Object.keys(properties).length === 0) return;
+  const errors = validateRecordData(properties, merged, touched);
+  if (errors.length > 0) {
+    throw new Error(`记录校验失败（${errors.length} 项，已拒绝写入 ${tableName}）：\n  - ${errors.join('\n  - ')}`);
+  }
+}
 
 export async function recordsList(tableName: string, options: any): Promise<void> {
   await executeCommand(async () => {
@@ -25,15 +43,16 @@ export async function recordCreate(tableName: string, options: any): Promise<voi
   await executeCommand(async () => {
     let data: any;
     if (options.file) {
-      data = JSON.parse(readFileSync(options.file, 'utf-8'));
+      data = parseJsonOption(readFileSync(options.file, 'utf-8'));
     } else if (options.json) {
-      data = JSON.parse(options.json);
-    } else if (options.data) {
-      data = JSON.parse(options.data);
+      data = parseJsonOption(options.json);
+    } else if (parseKvData(options.data) !== undefined) {
+      data = parseKvData(options.data);
     } else {
       throw new Error('请提供 --file, --json 或 --data 参数');
     }
     const client = getApiClient();
+    await assertRecordValid(client, tableName, data);
     const id = await client.saveTableRecord(tableName, data, options.upsert);
     console.log(formatSuccess(`创建成功，记录ID: ${id}`));
   });
@@ -43,24 +62,28 @@ export async function recordUpdate(tableName: string, id: string, options: any):
   await executeCommand(async () => {
     let partialData: any;
     if (options.file) {
-      partialData = JSON.parse(readFileSync(options.file, 'utf-8'));
+      partialData = parseJsonOption(readFileSync(options.file, 'utf-8'));
     } else if (options.json) {
-      partialData = JSON.parse(options.json);
-    } else if (options.data) {
-      partialData = JSON.parse(options.data);
+      partialData = parseJsonOption(options.json);
+    } else if (parseKvData(options.data) !== undefined) {
+      partialData = parseKvData(options.data);
     } else {
       throw new Error('请提供 --file, --json 或 --data 参数');
     }
 
     const client = getApiClient();
 
-    // 1️⃣ 先获取原始记录
+    // 1️⃣ 先获取原始记录（缺失记录的 GET 返回 200+{}，用 id 判存在性，避免静默 PATCH 无效 id）
     const original = await client.getTableRecordById(tableName, id);
+    if (!original || !original.id) throw new Error(`记录不存在: ${tableName}/${id}`);
 
     // 2️⃣ 合并数据（用户的修改覆盖原始值）
     const merged = deepMerge(original, partialData);
 
-    // 3️⃣ 调用更新接口
+    // 3️⃣ 值级门禁：只查本次提交触及的键（旧记录存量问题不阻塞合法局部更新）
+    await assertRecordValid(client, tableName, merged, partialData);
+
+    // 4️⃣ 调用更新接口
     await client.updateTableRecord(tableName, id, merged);
     console.log(formatSuccess('更新成功'));
   });

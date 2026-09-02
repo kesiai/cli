@@ -14,7 +14,7 @@
 | `$K driver-create -n <名称> -t <驱动key>` | 创建驱动实例（集群节点加 `--run-mode node --cluster <集群实例id>`） | ✅ |
 | `$K driver-install <instanceId>` | 安装驱动（默认阻塞等待到完成） | ✅ |
 | `$K driver-install-info <taskId>` | 查询安装进度（`--no-wait`/超时后续查） | ❌ |
-| `$K driver-update-config <instanceId> --file/--json` | 更新配置（device 块） | ✅ |
+| `$K driver-update-config <instanceId> --file/--json` | 更新配置（device 块；校验 tags/commands/events 归属与必填 settings） | ✅ |
 | `$K driver-restart <instanceId>` | 重启驱动（配置变更后生效） | ✅ |
 | `$K driver-delete <instanceId>` | 删除实例 | ✅ |
 
@@ -70,7 +70,7 @@ $K driver-catalog --search modbus    # 关键词过滤（匹配 key/描述/分�
 
 ```bash
 $K driver-create -n "Modbus TCP 驱动-01" -t modbus-tcp-driver
-$K driver-create -n "西门子 S7" -t s7-driver --run-mode one --distributed all -d "车间 PLC"
+$K driver-create -n "西门子 S7" -t s7-driver --run-mode one --distributed all
 $K driver-create -n "..." -t ... --file payload.json   # 完整 payload 逃生舱（与 flags 深合并）
 ```
 
@@ -82,7 +82,6 @@ $K driver-create -n "..." -t ... --file payload.json   # 完整 payload 逃生�
 | `--run-mode` | `one` | `one` / `cluster` / `node` |
 | `--cluster` | - | 集群实例 id，**仅 `--run-mode node` 时必填**（见下方集群节点创建） |
 | `--distributed` | `all` | `all` / `average` / `lazy` |
-| `-d, --description` | 空 | 描述 |
 
 输出：`{id, name, driverType, driverVersion, runMode, groupId?, distributed, hint}`（`groupId` 仅集群节点返回，= 所选集群的 groupId）。
 
@@ -158,23 +157,19 @@ $K driver-schema modbus-tcp-driver
 
 **⚠️ 三块的归属（平台语义，决定什么配置放哪一层）：**
 
-| 块 | 归属 | 说明 |
-|----|------|------|
-| `driver` | **驱动自身配置表单**——创建/配置驱动实例时填的 | UI 驱动配置页**只显示**这里定义的字段 |
-| `model` | **模型（设备表）的表单**——选完驱动建表/模型时要加的配置 | 建设备表时生效 |
-| `device` | **设备能拿到的配置**（设备层默认值） | 设备/表层面 |
+| 块 | 归属 |
+|----|------|
+| `driver` | 驱动自身配置表单（UI 驱动配置页**只显示**这里定义的字段） |
+| `model` | 模型（设备表）的表单——选完驱动建表时要加的配置 |
+| `device` | 设备能拿到的配置（设备层默认值）；`driver-update-config` 的 settings 用这个 |
 
-- **`device.settings`** → 驱动实例的连接配置（`driver-update-config` 的 settings 用这个）：`{字段名: {title, type, description, default?, enum?, options?}}` 扁平字段表
-- **`model.tags` / `device.tags`** → 点位定义：`required` 字段名列表 + `fields` 字段表（enum 字段带 `options` 中文标签）。**点位属于模型/设备层，不属于驱动实例**
-
-**⚠️ 数据点（tags）能否配在驱动实例上：看 `driver` 块是否定义了 `tags`。**
-主流协议驱动（modbus / siemens-s7 等）的 `driver` 块**只有 settings、没有 tags**——驱动实例上没有数据点配置能力。此时任务要求"配数据点"的正确做法：
+**⚠️ 点位（tags）属于模型/设备层，不属于驱动实例。** 主流协议驱动（modbus / siemens-s7 等）的 `driver` 块只有 settings、没有 tags——驱动实例上没有数据点配置能力。此时任务要求"配数据点"的正确做法：
 
 1. 照常完成 创建 → 安装 → settings 配置 → 重启 → running
-2. **不要把点位写进驱动实例**（实例上的 `device.tags` 是设备层默认值，不会出现在驱动配置页，写了用户也看不见）
-3. **如实反馈**：「驱动已创建并启动；该驱动的配置没有数据点定义，未配置数据点——数据点属于模型/设备层，需要创建设备表时定义」
+2. **不写实例 tags**（`device.tags` 是设备层默认值，不显示在驱动配置页，写了用户看不见）
+3. **如实反馈**：「驱动已创建并启动；该驱动的配置没有数据点定义，未配置数据点——数据点属于模型/设备层，建设备表时定义」
 
-⚠️ **「任务要求定义/配置/新增数据点」不构成写实例 tags 的理由**。任务里出现"配数据点"字样 ≠ 任务要求"设备层默认值"——前者应按上面 3 步如实处理，后者仅指任务原文明说"为设备预置默认点位"的罕见场景。不要用"任务明确要求数据点"来解释写 tags 的行为。
+CLI 已硬校验兜底：`driver-update-config` 会拒写 driver 块未定义的 tags/commands/events，也会拒绝缺失必填 settings（required 且无 default）的保存。
 
 **settings 填充规则（优先级从高到低）：**
 
@@ -195,7 +190,7 @@ $K driver-schema modbus-tcp-driver
 $K driver-update-config <instanceId> --file config.json
 # 示例 config.json（驱动接入任务只写 settings）：
 # { "settings": {"ip": "192.168.1.10", "port": 502} }
-# tags 只在 schema driver 块定义了 tags 时才写（极罕见）；「任务要求配数据点」不构成写 tags 的理由（见上方决策规则）
+# tags 只在 schema driver 块定义了 tags 时才写（极罕见，CLI 会拒绝违规写入）
 
 $K driver-restart <instanceId>        # 配置变更后重启生效（内部按 groupId 路由），轮询 state 到 running
 $K driver <instanceId>                # 验证 device.settings 已持久化；state 在 $K drivers 列表中查

@@ -33,15 +33,13 @@ $K table-update <id> --file schema.json
 $K table-update <id> --json '{"title":"新标题"}'
 ```
 
-`table-update` 为**深合并更新**：先读取原始表配置（GET），与传入数据 deepMerge 后再提交，未传入字段保持原值。嵌套配置块（`device`、`schema`、`warning` 等）同样按字段深合并，不会整块替换。
+`table-update` 未传入字段保持原值（深合并，嵌套配置块 `device`/`schema`/`warning` 按字段合并、不整块替换），可只提交要改的字段。
 
 ### 修改表标识
 
 ```bash
 $K table-change-id <oldId> <newId>
 ```
-
-内部行为：GET 全量表配置 → 覆盖 `id` 为新值 → `PATCH /core/t/schema/change/{旧id}`（新 id 在 `body.id`）。
 
 ⚠️ **特殊操作，专用命令**
 - 后端实测（103 环境）：change 只读 `body.id`，其余字段被忽略、表配置保留

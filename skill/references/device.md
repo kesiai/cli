@@ -86,9 +86,9 @@ $K driver-catalog [--search kw]  # 驱动目录（可安装列表，含已安装
 2. **`function: ["device", "warning", "computed"]`** — 必须包含 `"device"`
 3. **`device` / `computed` / `warning`** — 使用正确的 JSON 结构
 
-### ⚠️ 设备表必须包含 7 个预设字段
+### 设备表 7 个预设字段
 
-设备表有固定的预设字段，**创建时必须全部包含**，不能自定义或省略：
+固定预设字段（CLI 写前校验，缺项/改属性直接拒绝），照抄下表：
 
 | key | title | type | controlType | need |
 |-----|-------|------|-------------|------|
@@ -105,9 +105,8 @@ formLayout 固定 `cols: 3, labelLayout: "vertical"`，6 行填满（最后一�
 ### ⚠️ 驱动信息必须来自用户指定或 `$K drivers` 查询
 
 - 用户指定驱动时，必须使用用户给出的驱动配置（driver/groupId），不能自行猜测或使用其他驱动
-- ⚠️ **device 块的驱动关联字段只有 `driver` 和 `groupId` 两个**；`driverType`/`driverName`/`driverExampleId`/`driverGroupId` 是已废弃的冗余字段，**禁止写入**
-- 测试驱动特征要严格遵守：`driver: "test"`, `groupId: "test"`
-- 测试驱动的点位**不需要** area/offset/dataType 等协议字段，只需要 id/name/policy
+- 驱动关联字段只有 `driver` 和 `groupId`（CLI 拒绝写入废弃的 `driverType`/`driverName`/`driverExampleId`/`driverGroupId`）
+- 测试驱动特征：`driver: "test"`, `groupId: "test"`；点位只要 id/name/policy（CLI 拒绝写入 area/offset 等协议字段）
 - 测试驱动完整配置详见 [workflow-full.md](workflow-full.md#测试驱动配置)
 
 ### 驱动字段映射
