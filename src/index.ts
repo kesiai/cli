@@ -16,6 +16,8 @@ import * as user from './commands/user.js';
 import * as role from './commands/role.js';
 import * as dict from './commands/dict.js';
 import * as setting from './commands/setting.js';
+import * as ds from './commands/ds.js';
+import * as media from './commands/media.js';
 import * as driver from './commands/driver.js';
 import * as driverSchema from './commands/driver-schema.js';
 import * as driverCatalog from './commands/driver-catalog.js';
@@ -220,11 +222,79 @@ addOutput(warnings.command('stats').description('报警统计')).action(warning.
 addOutput(warnings.command('latest').description('最新报警').option('-l, --limit <number>', '数量', '10')).action(warning.warningsLatest);
 warnings.command('batch-confirm <ids...>').description('批量确认').option('-n, --note <text>', '备注').option('--user-id <id>', '用户ID').action(warning.warningsBatchConfirm);
 
-// ==================== 文件 ====================
+// ==================== 文件 / 媒体库 ====================
 
-program.command('file-upload <filePath>').description('上传文件').option('--name <name>', '文件名').option('--mime <type>', 'MIME类型').action(file.fileUpload);
-addOutput(program.command('file-info <id>').description('文件信息')).action(file.fileInfo);
-program.command('file-delete <id>').description('删除文件').action(file.fileDelete);
+program.command('file-upload <filePath>')
+  .description('上传文件到媒体库（返回 {url}；平台无删除端点，上传不可逆）')
+  .option('--name <name>', '文件名')
+  .option('--mime <type>', 'MIME类型')
+  .option('--catalog <path>', '目标目录 path（media-dirs 查；不传落在文件服务根，媒体库页不可见）')
+  .action(file.fileUpload);
+
+addOutput(program.command('media-dirs').description('媒体库全量目录树')).action(media.mediaDirs);
+addOutput(program.command('media-ls [path]').description('媒体库目录内容（path 为目录 path；不传=根列表）')).action(media.mediaLs);
+program.command('media-mkdir <dirName>').description('建目录（⚠️ 平台无目录删除端点，创建不可逆）').option('--catalog <path>', '父目录 path（不传=根）').action(media.mediaMkdir);
+
+// ==================== 数据接口（ds） ====================
+
+addOutput(program.command('ds-groups').description('数据源分组列表')).action(ds.groupsList);
+addOutput(program.command('ds-group <id>').description('分组详情')).action(ds.groupGet);
+
+program.command('ds-group-create')
+  .description('创建数据源分组')
+  .requiredOption('-n, --name <name>', '分组名称')
+  .requiredOption('-t, --type <type>', '类型：http / db / script / internal')
+  .option('--remark <remark>', '备注')
+  .option('--json <json>', 'setting 完整 JSON（http: baseUrl/headers；db: driverType/ip/port/dbName/username/password；script: inputScript/outputScript）')
+  .action(ds.groupCreate);
+
+program.command('ds-group-update <id>')
+  .description('更新分组（按键合并）')
+  .option('-n, --name <name>', '名称')
+  .option('-t, --type <type>', '类型')
+  .option('--remark <remark>', '备注')
+  .option('--json <json>', 'setting JSON（整体替换）')
+  .action(ds.groupUpdate);
+
+program.command('ds-group-delete <id>')
+  .description('删除分组（有接口绑定时拒删，先删接口；--force 强删留悬挂）')
+  .option('--force', '跳过绑定检查强删（接口会悬挂且无法修复）')
+  .action(ds.groupDelete);
+
+addOutput(program.command('ds-apis').description('数据接口列表').option('-g, --group <id|name>', '按分组过滤')).action(ds.apisList);
+addOutput(program.command('ds-api <idOrKey>').description('接口详情（接受 id 或 key）')).action(ds.apiGet);
+
+program.command('ds-api-create')
+  .description('创建数据接口（必须提供 setting，否则能建但执行必失败）')
+  .requiredOption('--group <id|name>', '所属分组（ds-groups 查）')
+  .requiredOption('--key <key>', '接口标识（全库唯一，执行时的 URL 段）')
+  .requiredOption('-n, --name <name>', '接口名称')
+  .option('--method <method>', 'http/internal 型：请求方法（默认 GET）')
+  .option('--url <url>', 'http 型完整路径或 internal 型平台相对路径（如 /core/role）')
+  .option('--sql <sql>', 'db 型：SQL 语句')
+  .option('--send-type <type>', 'db 型：query/insert/update/delete（默认 query）')
+  .option('--table <table>', 'db 型：表名')
+  .option('--script-file <path>', 'script 型：Node 脚本文件路径')
+  .option('-p, --param <name=type...>', '接口参数（可多个，type: string/number/boolean/object/array，如 --param limit=number）')
+  .option('--json <json>', 'setting 完整 JSON（覆盖快捷 flags）')
+  .action(ds.apiCreate);
+
+program.command('ds-api-update <idOrKey>')
+  .description('更新接口（按键合并；CLI 自动补 dataGroup——平台 PATCH 缺它直接 500）')
+  .option('-n, --name <name>', '名称')
+  .option('--group <id|name>', '迁移到其他分组')
+  .option('-p, --param <name=type...>', '参数定义（整体替换 variableSchema）')
+  .option('--json <json>', 'setting 完整 JSON（整体替换）')
+  .action(ds.apiUpdate);
+
+program.command('ds-api-delete <idOrKey>').description('删除接口').action(ds.apiDelete);
+
+addOutput(program.command('ds-api-exec <key>')
+  .description('执行数据接口，返回结果')
+  .option('-p, --param <k=v...>', '参数值（可多个，值按 JSON 解析后回退字符串，如 --param limit=2)')
+  .option('--json <json>', '参数体 JSON（与 --param 合并）')
+  .option('--debug', '服务端 debug 模式执行'))
+  .action(ds.apiExec);
 
 // ==================== 设备控制 ====================
 

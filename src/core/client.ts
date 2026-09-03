@@ -369,8 +369,8 @@ export class KesiApiClient {
 
   // ==================== 文件 ====================
 
-  async uploadFile(file: Buffer, filename: string, mimeType?: string): Promise<any> {
-    // 上传到媒体库：POST /core/mediaLibrary/upload?action=cover
+  async uploadFile(file: Buffer, filename: string, mimeType?: string, catalog?: string): Promise<any> {
+    // 上传到媒体库：POST /core/mediaLibrary/upload?action=cover[&catalog=<目录path>]
     // 手动构造 multipart/form-data body（axios 1.7 不会为 native FormData 自动加 boundary）
     const mime = mimeType || 'application/octet-stream';
     const boundary = `----KesiBoundary${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
@@ -379,20 +379,13 @@ export class KesiApiClient {
     );
     const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
     const body = Buffer.concat([header, file, footer]);
+    const params: Record<string, string> = { action: 'cover' };
+    if (catalog) params.catalog = catalog;
     const res = await this.http.post('/core/mediaLibrary/upload', body, {
-      params: { action: 'cover' },
+      params,
       headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
     });
     return res.data;
-  }
-
-  async getFileInfo(id: string): Promise<any> {
-    const res = await this.http.get(`/api/files/${id}`);
-    return res.data || null;
-  }
-
-  async deleteFile(id: string): Promise<void> {
-    await this.http.delete(`/api/files/${id}`);
   }
 
   // ==================== 设备控制 ====================
@@ -673,5 +666,87 @@ export class KesiApiClient {
   /** 局部更新系统设置（服务端按键合并；返回 {status:"OK"} 不回实体，需另读） */
   async updateSettings(data: any): Promise<void> {
     await this.http.patch('/core/setting', data);
+  }
+
+  // ==================== 数据接口（ds/*） ====================
+
+  async listDataGroups(): Promise<any[]> {
+    const res = await this.http.get('/ds/group');
+    return res.data || [];
+  }
+
+  /** 注意：不存在的 id 返回 Go 零值对象（不 404），调用方需检测 id 为空 */
+  async getDataGroupById(id: string): Promise<any> {
+    const res = await this.http.get(`/ds/group/${id}`);
+    return res.data || null;
+  }
+
+  async createDataGroup(data: any): Promise<string> {
+    const res = await this.http.post('/ds/group', data);
+    return res.data.InsertedID || res.data.id;
+  }
+
+  async updateDataGroup(id: string, data: any): Promise<void> {
+    await this.http.patch(`/ds/group/${id}`, data);
+  }
+
+  async deleteDataGroup(id: string): Promise<void> {
+    await this.http.delete(`/ds/group/${id}`);
+  }
+
+  async listDataInterfaces(): Promise<any[]> {
+    const res = await this.http.get('/ds/interface');
+    return res.data || [];
+  }
+
+  /** 注意：不存在的 id 返回 Go 零值对象（不 404），调用方需检测 id 为空 */
+  async getDataInterfaceById(id: string): Promise<any> {
+    const res = await this.http.get(`/ds/interface/${id}`);
+    return res.data || null;
+  }
+
+  async createDataInterface(data: any): Promise<string> {
+    const res = await this.http.post('/ds/interface', data);
+    return res.data.InsertedID || res.data.id;
+  }
+
+  async updateDataInterface(id: string, data: any): Promise<void> {
+    await this.http.patch(`/ds/interface/${id}`, data);
+  }
+
+  async deleteDataInterface(id: string): Promise<void> {
+    await this.http.delete(`/ds/interface/${id}`);
+  }
+
+  /** 执行数据接口：POST /ds/p/<key>，body 为参数键值（对应 variableSchema 的 paramKey） */
+  async executeDataInterface(key: string, params: any, debug = false): Promise<any> {
+    const q = debug ? '?debug=true' : '';
+    const res = await this.http.post(`/ds/p/${encodeURIComponent(key)}${q}`, params || {});
+    return res.data;
+  }
+
+  // ==================== 媒体库（core/mediaLibrary） ====================
+
+  /** 根目录列表（含内置资源等顶层目录） */
+  async listMediaRoot(): Promise<any[]> {
+    const res = await this.http.get('/core/mediaLibrary');
+    return res.data || [];
+  }
+
+  /** 按目录列内容（catalog 为目录 path，如 "我的文件/自定义组件"） */
+  async listMediaDir(catalog: string): Promise<any[]> {
+    const res = await this.http.get('/core/mediaLibrary', { params: { catalog } });
+    return res.data || [];
+  }
+
+  /** 全量目录树（name/path/child[]） */
+  async getMediaDirTree(): Promise<any[]> {
+    const res = await this.http.get('/core/mediaLibrary/all/dir');
+    return res.data || [];
+  }
+
+  /** 建目录（catalog 为父目录 path，空串=根；平台无目录删除端点，创建不可逆） */
+  async createMediaDir(catalog: string, dirName: string): Promise<void> {
+    await this.http.post('/core/mediaLibrary/mkdir', { catalog: catalog || '', dirName });
   }
 }

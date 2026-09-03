@@ -54,7 +54,8 @@ $K tables --base-url http://<平台>/rest --project-id <projectId> --token <toke
 | 记录管理 | 6 | 记录 CRUD、批量操作 | [references/record.md](references/record.md) |
 | 设备/数据 | 10 | 数据点、时序数据、设备控制、在线统计、驱动管理 | [references/device.md](references/device.md) |
 | 报警系统 | 12 | 报警规则、报警事件、报警归档 | [references/warning.md](references/warning.md) |
-| 文件管理 | 3 | 文件上传、下载、删除 | [references/file.md](references/file.md) |
+| 文件/媒体库 | 4 | 上传（--catalog 定目录）、目录树、目录列表、建目录 | [references/file.md](references/file.md) |
+| 数据接口 | 12 | 分组/接口 CRUD、执行 | [references/ds.md](references/ds.md) |
 | 报表管理 | 6 | 报表 CRUD、执行、导出 | [references/report.md](references/report.md) |
 | 用户/角色 | 10 | 用户 CRUD、角色 CRUD、角色绑定 | [references/user.md](references/user.md) · [references/role.md](references/role.md) |
 | 数据字典 | 5 | 字典项 CRUD（全局键值对） | [references/dict.md](references/dict.md) |
@@ -175,13 +176,28 @@ $K records devices -f 'name~空调' -l 5        # 模糊搜索
 
 ---
 
-## 文件管理
+## 文件 / 媒体库
 
 | 命令 | 说明 |
 |------|------|
-| `$K files [-f filter] [-l limit]` | 查询文件列表 |
-| `$K file-upload --file <本地路径>` | 上传文件 |
-| `$K file-delete <id>` | 删除文件 |
+| `$K file-upload <路径> [--name] [--mime] [--catalog <目录path>]` | 上传到媒体库，返回 {url}（⚠️ 无删除端点不可逆；不传 --catalog 落项目根，媒体库页不可见） |
+| `$K media-dirs` | 媒体库全量目录树 |
+| `$K media-ls [path]` | 目录内容（不传=根列表） |
+| `$K media-mkdir <dirName> [--catalog <父目录>]` | 建目录（⚠️ 不可删除） |
+
+## 数据接口（ds）
+
+| 命令 | 说明 |
+|------|------|
+| `$K ds-groups` / `$K ds-group <idOrName>` | 数据源分组列表 / 详情 |
+| `$K ds-group-create -n <名> -t <http\|db\|script\|internal> [--json setting]` | 建分组（db/http 型在 --json 配连接信息） |
+| `$K ds-group-update <idOrName> [-n/-t/--json]` | 改分组（按键合并） |
+| `$K ds-group-delete <idOrName> [--force]` | 删分组（有接口绑定拒删，先删接口；--force 强删留悬挂） |
+| `$K ds-apis [-g <组>]` / `$K ds-api <idOrKey>` | 接口列表 / 详情 |
+| `$K ds-api-create --group <组> --key <k> -n <名> [setting flags] [-p 名=类型...]` | 建接口（必须给 setting：internal/http 用 --method --url；db 用 --sql；脚本用 --script-file） |
+| `$K ds-api-update <idOrKey> [-n] [--group] [-p ...] [--json]` | 改接口（自动补 dataGroup，平台缺它 500） |
+| `$K ds-api-delete <idOrKey>` | 删接口 |
+| `$K ds-api-exec <key> [-p k=v ...] [--json] [--debug]` | 执行接口返回结果 |
 
 ---
 
@@ -262,7 +278,8 @@ $K query-get <resource> <id>
 | `warning/warning/archive` | 报警归档 |
 | `warning/rule` | 报警规则 |
 | `report/report` | 报表管理 |
-| `ds/interface` | 数据接口定义 |
+| `ds/group` | 数据源分组（写操作用 ds-group-* 命令） |
+| `ds/interface` | 数据接口定义（写操作用 ds-api-* 命令） |
 | `flow/flow` | 工作流 |
 | `flow/flowTask/currentUser` | 我的任务 |
 

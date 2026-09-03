@@ -222,6 +222,8 @@ $K describe <tableId>     # 某张表的字段级 schema
 | [references/role.md](references/role.md) | 角色管理（CRUD、permission 词表、引用守卫） |
 | [references/dict.md](references/dict.md) | 数据字典（字典项 CRUD、type 六枚举、value 形态） |
 | [references/setting.md](references/setting.md) | 系统设置（全局配置读写、字段类型、必须还原） |
+| [references/ds.md](references/ds.md) | 数据接口（分组→接口→执行；setting 按类型；删分组/半成品守卫） |
+| [references/file.md](references/file.md) | 文件与媒体库（上传 --catalog 定目录；目录树/列表/建目录；无删除端点） |
 | [references/validation-rules.md](references/validation-rules.md) | 校验规则 |
 
 ---

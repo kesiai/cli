@@ -10,7 +10,8 @@
 |------|------|------|
 | [device.md](device.md) | 设备管理 | 设备表核心：数据点、时序、远程控制、报警。区分设备表与普通表 |
 | [driver-create.md](driver-create.md) | 驱动创建与管理 | 驱动全生命周期命令：目录→创建→安装→配置→重启→验证→删除 |
-| [file.md](file.md) | 文件管理 | 文件/媒体上传管理，上传后按 ID 引用 |
+| [file.md](file.md) | 文件与媒体库 | 上传入媒体库（--catalog 定目录）、目录树/列表/建目录；⚠️ 无删除端点不可逆 |
+| [ds.md](ds.md) | 数据接口 | 分组→接口→执行三层命令、setting 按类型、PATCH 补 dataGroup / 删分组守卫 |
 | [query-syntax.md](query-syntax.md) | 查询语法 | 统一 JSON 查询格式：filter、sort、limit、skip、操作符 |
 | [record.md](record.md) | 记录管理 | 表记录 CRUD（业务数据行） |
 | [report.md](report.md) | 报表管理 | 统计分析报表视图 |
@@ -82,4 +83,5 @@
 | 用户/角色管理 | [user.md](user.md) → [role.md](role.md) |
 | 数据字典 | [dict.md](dict.md) |
 | 系统设置 | [setting.md](setting.md) |
-| 文件上传 | [file.md](file.md) → [controls/upload.md](controls/upload.md) |
+| 文件/媒体库 | [file.md](file.md) → [controls/upload.md](controls/upload.md) |
+| 数据接口（内部/HTTP/DB/脚本取数） | [ds.md](ds.md) |

@@ -21134,7 +21134,7 @@ var KesiApiClient = class {
     await this.http.post("/warning/warning/batch-confirm", data);
   }
   // ==================== 文件 ====================
-  async uploadFile(file, filename, mimeType) {
+  async uploadFile(file, filename, mimeType, catalog) {
     const mime = mimeType || "application/octet-stream";
     const boundary = `----KesiBoundary${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
     const header = Buffer.from(
@@ -21148,18 +21148,13 @@ Content-Type: ${mime}\r
 --${boundary}--\r
 `);
     const body = Buffer.concat([header, file, footer]);
+    const params = { action: "cover" };
+    if (catalog) params.catalog = catalog;
     const res = await this.http.post("/core/mediaLibrary/upload", body, {
-      params: { action: "cover" },
+      params,
       headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` }
     });
     return res.data;
-  }
-  async getFileInfo(id) {
-    const res = await this.http.get(`/api/files/${id}`);
-    return res.data || null;
-  }
-  async deleteFile(id) {
-    await this.http.delete(`/api/files/${id}`);
   }
   // ==================== 设备控制 ====================
   /** 发送设备指令 */
@@ -21383,6 +21378,71 @@ Content-Type: ${mime}\r
   /** 局部更新系统设置（服务端按键合并；返回 {status:"OK"} 不回实体，需另读） */
   async updateSettings(data) {
     await this.http.patch("/core/setting", data);
+  }
+  // ==================== 数据接口（ds/*） ====================
+  async listDataGroups() {
+    const res = await this.http.get("/ds/group");
+    return res.data || [];
+  }
+  /** 注意：不存在的 id 返回 Go 零值对象（不 404），调用方需检测 id 为空 */
+  async getDataGroupById(id) {
+    const res = await this.http.get(`/ds/group/${id}`);
+    return res.data || null;
+  }
+  async createDataGroup(data) {
+    const res = await this.http.post("/ds/group", data);
+    return res.data.InsertedID || res.data.id;
+  }
+  async updateDataGroup(id, data) {
+    await this.http.patch(`/ds/group/${id}`, data);
+  }
+  async deleteDataGroup(id) {
+    await this.http.delete(`/ds/group/${id}`);
+  }
+  async listDataInterfaces() {
+    const res = await this.http.get("/ds/interface");
+    return res.data || [];
+  }
+  /** 注意：不存在的 id 返回 Go 零值对象（不 404），调用方需检测 id 为空 */
+  async getDataInterfaceById(id) {
+    const res = await this.http.get(`/ds/interface/${id}`);
+    return res.data || null;
+  }
+  async createDataInterface(data) {
+    const res = await this.http.post("/ds/interface", data);
+    return res.data.InsertedID || res.data.id;
+  }
+  async updateDataInterface(id, data) {
+    await this.http.patch(`/ds/interface/${id}`, data);
+  }
+  async deleteDataInterface(id) {
+    await this.http.delete(`/ds/interface/${id}`);
+  }
+  /** 执行数据接口：POST /ds/p/<key>，body 为参数键值（对应 variableSchema 的 paramKey） */
+  async executeDataInterface(key, params, debug = false) {
+    const q = debug ? "?debug=true" : "";
+    const res = await this.http.post(`/ds/p/${encodeURIComponent(key)}${q}`, params || {});
+    return res.data;
+  }
+  // ==================== 媒体库（core/mediaLibrary） ====================
+  /** 根目录列表（含内置资源等顶层目录） */
+  async listMediaRoot() {
+    const res = await this.http.get("/core/mediaLibrary");
+    return res.data || [];
+  }
+  /** 按目录列内容（catalog 为目录 path，如 "我的文件/自定义组件"） */
+  async listMediaDir(catalog) {
+    const res = await this.http.get("/core/mediaLibrary", { params: { catalog } });
+    return res.data || [];
+  }
+  /** 全量目录树（name/path/child[]） */
+  async getMediaDirTree() {
+    const res = await this.http.get("/core/mediaLibrary/all/dir");
+    return res.data || [];
+  }
+  /** 建目录（catalog 为父目录 path，空串=根；平台无目录删除端点，创建不可逆） */
+  async createMediaDir(catalog, dirName) {
+    await this.http.post("/core/mediaLibrary/mkdir", { catalog: catalog || "", dirName });
   }
 };
 
@@ -22437,25 +22497,10 @@ async function fileUpload(filePath, options) {
     const client = getApiClient();
     const buffer = (0, import_node_fs4.readFileSync)(filePath);
     const filename = options.name || filePath.split("/").pop() || "file";
-    const result = await client.uploadFile(buffer, filename, options.mime);
+    const result = await client.uploadFile(buffer, filename, options.mime, options.catalog);
     const format = resolveOutputFormat(options.output);
-    console.log(formatSuccess(`\u4E0A\u4F20\u6210\u529F`));
+    console.log(formatSuccess(`\u4E0A\u4F20\u6210\u529F${options.catalog ? `\uFF08\u76EE\u5F55\uFF1A${options.catalog}\uFF09` : ""}`));
     console.log(formatOutput(result, format));
-  });
-}
-async function fileInfo(id, options) {
-  await executeCommand(async () => {
-    const client = getApiClient();
-    const result = await client.getFileInfo(id);
-    const format = resolveOutputFormat(options.output);
-    console.log(formatOutput(result, format));
-  });
-}
-async function fileDelete(id) {
-  await executeCommand(async () => {
-    const client = getApiClient();
-    await client.deleteFile(id);
-    console.log(formatSuccess("\u5220\u9664\u6210\u529F"));
   });
 }
 
@@ -22996,8 +23041,321 @@ async function settingFields(options) {
   });
 }
 
-// src/commands/driver.ts
+// src/commands/ds.ts
 var import_node_fs7 = require("node:fs");
+var GROUP_TYPES = ["http", "db", "script", "internal"];
+var PARAM_TYPES = ["string", "number", "boolean", "object", "array"];
+function parseJsonArg(raw, flag) {
+  if (!raw) return void 0;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`${flag} \u4E0D\u662F\u5408\u6CD5 JSON\uFF1A${raw}`);
+  }
+}
+async function resolveGroup(idOrName) {
+  const client = getApiClient();
+  const byId = await client.getDataGroupById(idOrName);
+  if (byId && byId.id) return byId;
+  const groups = await client.listDataGroups();
+  const byName = groups.filter((g) => g.name === idOrName);
+  if (byName.length === 1) return byName[0];
+  if (byName.length > 1) {
+    throw new Error(`\u5206\u7EC4\u540D "${idOrName}" \u6709 ${byName.length} \u4E2A\u91CD\u540D\uFF0C\u8BF7\u7528 id \u6307\u5B9A\uFF1A${byName.map((g) => g.id).join(", ")}`);
+  }
+  throw new Error(`\u5206\u7EC4 "${idOrName}" \u4E0D\u5B58\u5728\uFF08ds-groups \u67E5\u770B\u73B0\u6709\u5206\u7EC4\uFF1B\u6CE8\u610F\u5E73\u53F0\u5BF9\u4E0D\u5B58\u5728\u7684 id \u8FD4\u56DE\u7A7A\u5BF9\u8C61\u800C\u975E 404\uFF09`);
+}
+async function resolveApi(idOrKey) {
+  const client = getApiClient();
+  const byId = await client.getDataInterfaceById(idOrKey);
+  if (byId && byId.id) return byId;
+  const apis = await client.listDataInterfaces();
+  const byKey = apis.find((a) => a.key === idOrKey);
+  if (byKey) return byKey;
+  throw new Error(`\u63A5\u53E3 "${idOrKey}" \u4E0D\u5B58\u5728\uFF08ds-apis \u67E5\u770B\u73B0\u6709\u63A5\u53E3\uFF09`);
+}
+async function requireGroup(idOrName) {
+  return resolveGroup(idOrName);
+}
+function buildVariableSchema(params) {
+  if (!params || params.length === 0) return void 0;
+  return params.map((p) => {
+    const eq = p.indexOf("=");
+    if (eq < 0) throw new Error(`--param \u683C\u5F0F\u4E3A \u540D\u79F0=\u7C7B\u578B\uFF08\u5982 --param limit=number\uFF09\uFF0C\u6536\u5230 "${p}"`);
+    const paramKey = p.slice(0, eq);
+    const type = p.slice(eq + 1);
+    if (!PARAM_TYPES.includes(type)) {
+      throw new Error(`\u53C2\u6570\u7C7B\u578B "${type}" \u65E0\u6548\uFF08\u53EF\u9009\uFF1A${PARAM_TYPES.join("/")}\uFF1B\u5982 --param ${paramKey}=number\uFF09`);
+    }
+    if (!paramKey) throw new Error(`--param \u7684\u53C2\u6570\u540D\u4E0D\u80FD\u4E3A\u7A7A\uFF08\u6536\u5230 "${p}"\uFF09`);
+    return {
+      paramKey,
+      name: paramKey,
+      desc: "",
+      paramType: "",
+      variableType: { schema: { type } },
+      defaultValue: { value: null }
+    };
+  });
+}
+function mergeSetting(base, extra) {
+  return { ...base, ...extra };
+}
+function buildSetting(options, _groupType) {
+  const jsonSetting = options.json ? parseJsonArg(options.json, "--json") : void 0;
+  const s = {};
+  if (options.method || options.url) {
+    s.method = options.method || "GET";
+    if (!options.url) throw new Error("--method/--url \u9700\u8981\u540C\u65F6\u63D0\u4F9B\uFF08http \u578B\u63A5\u53E3\u7684 setting \u5C31\u662F {method, url, ...}\uFF1B\u5B8C\u6574\u7ED3\u6784\u7528 --json\uFF09");
+    s.url = options.url;
+  } else if (options.sql) {
+    s.sql = options.sql;
+    s.sendType = options.sendType || "query";
+    if (!["query", "insert", "update", "delete"].includes(s.sendType)) {
+      throw new Error(`--send-type "${s.sendType}" \u65E0\u6548\uFF08\u53EF\u9009\uFF1Aquery/insert/update/delete\uFF09`);
+    }
+    if (options.table) s.tableName = options.table;
+    s.rawMode = false;
+    s.exOr = false;
+    s.tags = [];
+  } else if (options.scriptFile) {
+    let content;
+    try {
+      content = (0, import_node_fs7.readFileSync)(options.scriptFile, "utf8");
+    } catch {
+      throw new Error(`\u811A\u672C\u6587\u4EF6\u8BFB\u53D6\u5931\u8D25\uFF1A${options.scriptFile}`);
+    }
+    return mergeSetting({ type: "Node", content }, jsonSetting || {});
+  } else if (!jsonSetting) {
+    return void 0;
+  }
+  return mergeSetting(s, jsonSetting || {});
+}
+async function groupsList(options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const groups = await client.listDataGroups();
+    const format = resolveOutputFormat(options.output);
+    console.log(formatOutput(groups.map(({ id, name, type, remark, setting }) => ({ id, name, type, remark, setting })), format));
+  });
+}
+async function groupGet(id, options) {
+  await executeCommand(async () => {
+    const g = await requireGroup(id);
+    const format = resolveOutputFormat(options.output);
+    console.log(formatOutput(g, format));
+  });
+}
+async function groupCreate(options) {
+  await executeCommand(async () => {
+    if (!options.name) throw new Error("\u5206\u7EC4\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A\uFF08-n\uFF09");
+    if (!options.type) throw new Error("\u5206\u7EC4\u7C7B\u578B\u4E0D\u80FD\u4E3A\u7A7A\uFF08-t\uFF1B\u53EF\u9009 " + GROUP_TYPES.join("/") + "\uFF09");
+    if (!GROUP_TYPES.includes(options.type)) {
+      throw new Error(`\u5206\u7EC4\u7C7B\u578B "${options.type}" \u65E0\u6548\uFF08\u53EF\u9009\uFF1A${GROUP_TYPES.join("/")}\uFF09`);
+    }
+    const data = { name: options.name, type: options.type };
+    if (options.remark !== void 0) data.remark = options.remark;
+    if (options.json) data.setting = parseJsonArg(options.json, "--json");
+    const client = getApiClient();
+    const id = await client.createDataGroup(data);
+    console.log(formatSuccess(`\u5206\u7EC4\u5DF2\u521B\u5EFA\uFF1A${options.name} (${id})`));
+    const format = resolveOutputFormat(options.output);
+    console.log(formatOutput({ id, ...data }, format));
+  });
+}
+async function groupUpdate(id, options) {
+  await executeCommand(async () => {
+    const cur = await requireGroup(id);
+    const data = {};
+    if (options.name) data.name = options.name;
+    if (options.type) {
+      if (!GROUP_TYPES.includes(options.type)) {
+        throw new Error(`\u5206\u7EC4\u7C7B\u578B "${options.type}" \u65E0\u6548\uFF08\u53EF\u9009\uFF1A${GROUP_TYPES.join("/")}\uFF09`);
+      }
+      data.type = options.type;
+    }
+    if (options.remark !== void 0) data.remark = options.remark;
+    if (options.json) data.setting = parseJsonArg(options.json, "--json");
+    if (Object.keys(data).length === 0) throw new Error("\u6CA1\u6709\u8981\u66F4\u65B0\u7684\u5B57\u6BB5\uFF08-n / -t / --remark / --json\uFF09");
+    const client = getApiClient();
+    await client.updateDataGroup(cur.id, data);
+    const after = await requireGroup(cur.id);
+    const format = resolveOutputFormat(options.output);
+    console.log(formatSuccess("\u5206\u7EC4\u5DF2\u66F4\u65B0\uFF08\u6309\u952E\u5408\u5E76\uFF09"));
+    console.log(formatOutput(after, format));
+  });
+}
+async function groupDelete(id, options) {
+  await executeCommand(async () => {
+    const cur = await requireGroup(id);
+    const client = getApiClient();
+    const bound = (await client.listDataInterfaces()).filter((a) => a.dataGroup && a.dataGroup.id === cur.id);
+    if (bound.length > 0 && !options.force) {
+      throw new Error(
+        `\u5206\u7EC4 ${cur.name} (${cur.id}) \u4E0B\u8FD8\u6709 ${bound.length} \u4E2A\u63A5\u53E3\uFF0C\u5220\u9664\u4F1A\u8BA9\u4ED6\u4EEC\u5168\u90E8\u60AC\u6302\u4E14\u65E0\u6CD5\u4FEE\u590D\uFF1A
+` + bound.map((a) => `  - ${a.key} (${a.name})`).join("\n") + `
+\u5148 ds-api-delete \u8FD9\u4E9B\u63A5\u53E3\uFF0C\u6216\u786E\u8BA4\u8981\u8FDE\u5E26\u60AC\u6302\u7528 --force`
+      );
+    }
+    await client.deleteDataGroup(cur.id);
+    console.log(formatSuccess(`\u5206\u7EC4\u5DF2\u5220\u9664\uFF1A${cur.name} (${cur.id})` + (bound.length > 0 ? `\uFF1B\u26A0\uFE0F ${bound.length} \u4E2A\u63A5\u53E3\u5DF2\u60AC\u6302` : "")));
+  });
+}
+async function apisList(options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    let apis = await client.listDataInterfaces();
+    if (options.group) {
+      const g = await resolveGroup(options.group);
+      apis = apis.filter((a) => a.dataGroup && a.dataGroup.id === g.id);
+    }
+    const format = resolveOutputFormat(options.output);
+    console.log(
+      formatOutput(
+        apis.map((a) => ({
+          id: a.id,
+          key: a.key,
+          name: a.name,
+          group: a.dataGroup ? `${a.dataGroup.name} (${a.dataGroup.type})` : "\u26A0\uFE0F \u60AC\u6302\uFF08\u5206\u7EC4\u5DF2\u5220\uFF09",
+          hasSetting: !!a.setting,
+          params: (a.variableSchema || []).map((p) => `${p.paramKey}:${p.variableType?.schema?.type || "?"}`).join(",")
+        })),
+        format
+      )
+    );
+  });
+}
+async function apiGet(idOrKey, options) {
+  await executeCommand(async () => {
+    const a = await resolveApi(idOrKey);
+    const format = resolveOutputFormat(options.output);
+    console.log(formatOutput(a, format));
+  });
+}
+async function apiCreate(options) {
+  await executeCommand(async () => {
+    if (!options.key) throw new Error("\u63A5\u53E3\u6807\u8BC6 key \u4E0D\u80FD\u4E3A\u7A7A\uFF08--key\uFF1B\u5168\u5E93\u552F\u4E00\uFF0C\u6267\u884C\u65F6\u4F5C\u4E3A URL \u6BB5\uFF09");
+    if (!options.name) throw new Error("\u63A5\u53E3\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A\uFF08-n\uFF09");
+    if (!options.group) throw new Error("\u6240\u5C5E\u5206\u7EC4\u4E0D\u80FD\u4E3A\u7A7A\uFF08--group\uFF0C\u63A5\u53D7\u5206\u7EC4 id \u6216\u540D\u79F0\uFF09");
+    const group = await resolveGroup(options.group);
+    const setting = buildSetting(options, group.type);
+    if (!setting) {
+      throw new Error(
+        '\u7F3A\u5C11\u63A5\u53E3\u914D\u7F6E setting\uFF1A\u6CA1\u6709 setting \u7684\u63A5\u53E3\u80FD\u521B\u5EFA\u6210\u529F\u4F46\u4E00\u6267\u884C\u5C31\u62A5\u9519\uFF08Get "": unsupported protocol scheme ""\uFF09\u3002\n\u6309\u5206\u7EC4\u7C7B\u578B\u63D0\u4F9B\uFF1Ahttp/internal \u2192 --method GET --url /core/role\uFF1Bdb \u2192 --sql "..." --send-type query\uFF1Bscript \u2192 --script-file \u811A\u672C.js\uFF1B\u5B8C\u6574\u7ED3\u6784\u7528 --json'
+      );
+    }
+    const data = {
+      key: options.key,
+      name: options.name,
+      // 服务端会校验分组存在性并自动增富 dataGroup——只需带 id
+      dataGroup: { id: group.id },
+      setting
+    };
+    const schema = buildVariableSchema(options.param);
+    if (schema) data.variableSchema = schema;
+    const client = getApiClient();
+    const id = await client.createDataInterface(data);
+    console.log(formatSuccess(`\u63A5\u53E3\u5DF2\u521B\u5EFA\uFF1A${options.key} (${options.name})\uFF0C\u6267\u884C\uFF1Ads-api-exec ${options.key}`));
+    const created = await client.getDataInterfaceById(id);
+    const format = resolveOutputFormat(options.output);
+    console.log(formatOutput(created, format));
+  });
+}
+async function apiUpdate(idOrKey, options) {
+  await executeCommand(async () => {
+    const cur = await resolveApi(idOrKey);
+    const client = getApiClient();
+    const data = {};
+    if (options.name) data.name = options.name;
+    if (options.group) {
+      const g = await resolveGroup(options.group);
+      data.dataGroup = { id: g.id };
+    }
+    if (options.json) {
+      data.setting = mergeSetting(cur.setting || {}, parseJsonArg(options.json, "--json"));
+    }
+    const schema = buildVariableSchema(options.param);
+    if (schema) data.variableSchema = schema;
+    if (Object.keys(data).length === 0) throw new Error("\u6CA1\u6709\u8981\u66F4\u65B0\u7684\u5B57\u6BB5\uFF08-n / --group / --param / --json\uFF09");
+    if (!data.dataGroup) data.dataGroup = { id: cur.dataGroup && cur.dataGroup.id };
+    await client.updateDataInterface(cur.id, data);
+    const after = await client.getDataInterfaceById(cur.id);
+    const format = resolveOutputFormat(options.output);
+    console.log(formatSuccess("\u63A5\u53E3\u5DF2\u66F4\u65B0\uFF08\u6309\u952E\u5408\u5E76\uFF0C\u672A\u4F20\u5B57\u6BB5\u4FDD\u6301\u539F\u503C\uFF09"));
+    console.log(formatOutput(after, format));
+  });
+}
+async function apiDelete(idOrKey) {
+  await executeCommand(async () => {
+    const cur = await resolveApi(idOrKey);
+    const client = getApiClient();
+    await client.deleteDataInterface(cur.id);
+    console.log(formatSuccess(`\u63A5\u53E3\u5DF2\u5220\u9664\uFF1A${cur.key} (${cur.name})`));
+  });
+}
+async function apiExec(key, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const params = {};
+    if (options.param) {
+      for (const p of options.param) {
+        const eq = p.indexOf("=");
+        if (eq < 0) throw new Error(`--param \u683C\u5F0F\u4E3A \u952E=\u503C\uFF08\u5982 --param limit=2\uFF09\uFF0C\u6536\u5230 "${p}"`);
+        const k = p.slice(0, eq);
+        const raw = p.slice(eq + 1);
+        try {
+          params[k] = JSON.parse(raw);
+        } catch {
+          params[k] = raw;
+        }
+      }
+    }
+    if (options.json) {
+      Object.assign(params, parseJsonArg(options.json, "--json"));
+    }
+    const result = await client.executeDataInterface(key, params, !!options.debug);
+    const format = resolveOutputFormat(options.output);
+    console.log(formatSuccess(`\u6267\u884C\u6210\u529F\uFF1A${key}`));
+    console.log(formatOutput(result, format));
+  });
+}
+
+// src/commands/media.ts
+async function mediaDirs(options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const tree = await client.getMediaDirTree();
+    const format = resolveOutputFormat(options.output);
+    console.log(formatOutput(tree, format));
+  });
+}
+async function mediaLs(path, options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const items = path ? await client.listMediaDir(path) : await client.listMediaRoot();
+    const format = resolveOutputFormat(options.output);
+    console.log(
+      formatOutput(
+        items.map(({ name, isDir, path: path2, size, modTime }) => ({ name, isDir, path: path2, size, modTime })),
+        format
+      )
+    );
+  });
+}
+async function mediaMkdir(dirName, options) {
+  await executeCommand(async () => {
+    const catalog = options.catalog || "";
+    if (dirName.includes("/")) throw new Error(`\u76EE\u5F55\u540D\u4E0D\u80FD\u542B "/"\uFF08\u8981\u5EFA\u591A\u7EA7\u8BF7\u9010\u7EA7 media-mkdir\uFF1B\u6536\u5230 "${dirName}"\uFF09`);
+    const client = getApiClient();
+    await client.createMediaDir(catalog, dirName);
+    const full = catalog ? `${catalog}/${dirName}` : dirName;
+    console.log(formatSuccess(`\u76EE\u5F55\u5DF2\u521B\u5EFA\uFF1A${full}`));
+    console.log(formatSuccess("\u6CE8\u610F\uFF1A\u5E73\u53F0\u65E0\u76EE\u5F55\u5220\u9664\u7AEF\u70B9\uFF0C\u5A92\u4F53\u5E93\u76EE\u5F55\u521B\u5EFA\u540E\u4E0D\u53EF\u79FB\u9664"));
+  });
+}
+
+// src/commands/driver.ts
+var import_node_fs8 = require("node:fs");
 async function driversList(options) {
   await executeCommand(async () => {
     const client = getApiClient();
@@ -23033,7 +23391,7 @@ async function driverCreate(options) {
     if (options.json) {
       payload = deepMerge(payload, JSON.parse(options.json));
     } else if (options.file) {
-      payload = deepMerge(payload, JSON.parse((0, import_node_fs7.readFileSync)(options.file, "utf-8")));
+      payload = deepMerge(payload, JSON.parse((0, import_node_fs8.readFileSync)(options.file, "utf-8")));
     }
     if (!payload.name?.trim()) throw new Error("\u8BF7\u63D0\u4F9B\u9A71\u52A8\u540D\u79F0 (-n)");
     const client = getApiClient();
@@ -23329,14 +23687,14 @@ async function driverInstallInfo(taskId, options) {
 }
 
 // src/commands/driver-update-config.ts
-var import_node_fs8 = require("node:fs");
+var import_node_fs9 = require("node:fs");
 async function driverUpdateConfig(id, options) {
   await executeCommand(async () => {
     let incoming;
     if (options.json) {
       incoming = JSON.parse(options.json);
     } else if (options.file) {
-      incoming = JSON.parse((0, import_node_fs8.readFileSync)(options.file, "utf-8"));
+      incoming = JSON.parse((0, import_node_fs9.readFileSync)(options.file, "utf-8"));
     } else {
       throw new Error("\u8BF7\u63D0\u4F9B --json \u6216 --file \u53C2\u6570");
     }
@@ -23428,7 +23786,7 @@ async function queryGet(resource, id, options) {
 }
 
 // src/commands/ai/scan.ts
-var import_node_fs9 = require("node:fs");
+var import_node_fs10 = require("node:fs");
 async function scan(options) {
   await executeCommand(async () => {
     const client = getApiClient();
@@ -23503,7 +23861,7 @@ async function scan(options) {
     };
     const format = resolveOutputFormat(options.output);
     if (options.outputFile) {
-      (0, import_node_fs9.writeFileSync)(options.outputFile, JSON.stringify(output, null, 2), "utf-8");
+      (0, import_node_fs10.writeFileSync)(options.outputFile, JSON.stringify(output, null, 2), "utf-8");
       console.error(`\u5DF2\u5199\u5165: ${options.outputFile}`);
       if (format === "json") {
         console.log(JSON.stringify({ tableCount: output.tableCount, outputFile: options.outputFile }));
@@ -23706,7 +24064,7 @@ async function sample(tableId, options) {
 }
 
 // src/commands/ai/seed.ts
-var import_node_fs10 = require("node:fs");
+var import_node_fs11 = require("node:fs");
 function validateTableSchema(tableSchema, index) {
   const warnings2 = [];
   const title = tableSchema.title || tableSchema.id || `\u8868 #${index + 1}`;
@@ -23754,7 +24112,7 @@ async function seed(options) {
   await executeCommand(async () => {
     let data;
     if (options.file) {
-      data = JSON.parse((0, import_node_fs10.readFileSync)(options.file, "utf-8"));
+      data = JSON.parse((0, import_node_fs11.readFileSync)(options.file, "utf-8"));
     } else if (options.json) {
       data = JSON.parse(options.json);
     } else {
@@ -23861,9 +24219,21 @@ warnings.command("resolve <id>").alias("rv").description("\u6807\u8BB0\u6062\u59
 addOutput(warnings.command("stats").description("\u62A5\u8B66\u7EDF\u8BA1")).action(warningsStats);
 addOutput(warnings.command("latest").description("\u6700\u65B0\u62A5\u8B66").option("-l, --limit <number>", "\u6570\u91CF", "10")).action(warningsLatest);
 warnings.command("batch-confirm <ids...>").description("\u6279\u91CF\u786E\u8BA4").option("-n, --note <text>", "\u5907\u6CE8").option("--user-id <id>", "\u7528\u6237ID").action(warningsBatchConfirm);
-program2.command("file-upload <filePath>").description("\u4E0A\u4F20\u6587\u4EF6").option("--name <name>", "\u6587\u4EF6\u540D").option("--mime <type>", "MIME\u7C7B\u578B").action(fileUpload);
-addOutput(program2.command("file-info <id>").description("\u6587\u4EF6\u4FE1\u606F")).action(fileInfo);
-program2.command("file-delete <id>").description("\u5220\u9664\u6587\u4EF6").action(fileDelete);
+program2.command("file-upload <filePath>").description("\u4E0A\u4F20\u6587\u4EF6\u5230\u5A92\u4F53\u5E93\uFF08\u8FD4\u56DE {url}\uFF1B\u5E73\u53F0\u65E0\u5220\u9664\u7AEF\u70B9\uFF0C\u4E0A\u4F20\u4E0D\u53EF\u9006\uFF09").option("--name <name>", "\u6587\u4EF6\u540D").option("--mime <type>", "MIME\u7C7B\u578B").option("--catalog <path>", "\u76EE\u6807\u76EE\u5F55 path\uFF08media-dirs \u67E5\uFF1B\u4E0D\u4F20\u843D\u5728\u6587\u4EF6\u670D\u52A1\u6839\uFF0C\u5A92\u4F53\u5E93\u9875\u4E0D\u53EF\u89C1\uFF09").action(fileUpload);
+addOutput(program2.command("media-dirs").description("\u5A92\u4F53\u5E93\u5168\u91CF\u76EE\u5F55\u6811")).action(mediaDirs);
+addOutput(program2.command("media-ls [path]").description("\u5A92\u4F53\u5E93\u76EE\u5F55\u5185\u5BB9\uFF08path \u4E3A\u76EE\u5F55 path\uFF1B\u4E0D\u4F20=\u6839\u5217\u8868\uFF09")).action(mediaLs);
+program2.command("media-mkdir <dirName>").description("\u5EFA\u76EE\u5F55\uFF08\u26A0\uFE0F \u5E73\u53F0\u65E0\u76EE\u5F55\u5220\u9664\u7AEF\u70B9\uFF0C\u521B\u5EFA\u4E0D\u53EF\u9006\uFF09").option("--catalog <path>", "\u7236\u76EE\u5F55 path\uFF08\u4E0D\u4F20=\u6839\uFF09").action(mediaMkdir);
+addOutput(program2.command("ds-groups").description("\u6570\u636E\u6E90\u5206\u7EC4\u5217\u8868")).action(groupsList);
+addOutput(program2.command("ds-group <id>").description("\u5206\u7EC4\u8BE6\u60C5")).action(groupGet);
+program2.command("ds-group-create").description("\u521B\u5EFA\u6570\u636E\u6E90\u5206\u7EC4").requiredOption("-n, --name <name>", "\u5206\u7EC4\u540D\u79F0").requiredOption("-t, --type <type>", "\u7C7B\u578B\uFF1Ahttp / db / script / internal").option("--remark <remark>", "\u5907\u6CE8").option("--json <json>", "setting \u5B8C\u6574 JSON\uFF08http: baseUrl/headers\uFF1Bdb: driverType/ip/port/dbName/username/password\uFF1Bscript: inputScript/outputScript\uFF09").action(groupCreate);
+program2.command("ds-group-update <id>").description("\u66F4\u65B0\u5206\u7EC4\uFF08\u6309\u952E\u5408\u5E76\uFF09").option("-n, --name <name>", "\u540D\u79F0").option("-t, --type <type>", "\u7C7B\u578B").option("--remark <remark>", "\u5907\u6CE8").option("--json <json>", "setting JSON\uFF08\u6574\u4F53\u66FF\u6362\uFF09").action(groupUpdate);
+program2.command("ds-group-delete <id>").description("\u5220\u9664\u5206\u7EC4\uFF08\u6709\u63A5\u53E3\u7ED1\u5B9A\u65F6\u62D2\u5220\uFF0C\u5148\u5220\u63A5\u53E3\uFF1B--force \u5F3A\u5220\u7559\u60AC\u6302\uFF09").option("--force", "\u8DF3\u8FC7\u7ED1\u5B9A\u68C0\u67E5\u5F3A\u5220\uFF08\u63A5\u53E3\u4F1A\u60AC\u6302\u4E14\u65E0\u6CD5\u4FEE\u590D\uFF09").action(groupDelete);
+addOutput(program2.command("ds-apis").description("\u6570\u636E\u63A5\u53E3\u5217\u8868").option("-g, --group <id|name>", "\u6309\u5206\u7EC4\u8FC7\u6EE4")).action(apisList);
+addOutput(program2.command("ds-api <idOrKey>").description("\u63A5\u53E3\u8BE6\u60C5\uFF08\u63A5\u53D7 id \u6216 key\uFF09")).action(apiGet);
+program2.command("ds-api-create").description("\u521B\u5EFA\u6570\u636E\u63A5\u53E3\uFF08\u5FC5\u987B\u63D0\u4F9B setting\uFF0C\u5426\u5219\u80FD\u5EFA\u4F46\u6267\u884C\u5FC5\u5931\u8D25\uFF09").requiredOption("--group <id|name>", "\u6240\u5C5E\u5206\u7EC4\uFF08ds-groups \u67E5\uFF09").requiredOption("--key <key>", "\u63A5\u53E3\u6807\u8BC6\uFF08\u5168\u5E93\u552F\u4E00\uFF0C\u6267\u884C\u65F6\u7684 URL \u6BB5\uFF09").requiredOption("-n, --name <name>", "\u63A5\u53E3\u540D\u79F0").option("--method <method>", "http/internal \u578B\uFF1A\u8BF7\u6C42\u65B9\u6CD5\uFF08\u9ED8\u8BA4 GET\uFF09").option("--url <url>", "http \u578B\u5B8C\u6574\u8DEF\u5F84\u6216 internal \u578B\u5E73\u53F0\u76F8\u5BF9\u8DEF\u5F84\uFF08\u5982 /core/role\uFF09").option("--sql <sql>", "db \u578B\uFF1ASQL \u8BED\u53E5").option("--send-type <type>", "db \u578B\uFF1Aquery/insert/update/delete\uFF08\u9ED8\u8BA4 query\uFF09").option("--table <table>", "db \u578B\uFF1A\u8868\u540D").option("--script-file <path>", "script \u578B\uFF1ANode \u811A\u672C\u6587\u4EF6\u8DEF\u5F84").option("-p, --param <name=type...>", "\u63A5\u53E3\u53C2\u6570\uFF08\u53EF\u591A\u4E2A\uFF0Ctype: string/number/boolean/object/array\uFF0C\u5982 --param limit=number\uFF09").option("--json <json>", "setting \u5B8C\u6574 JSON\uFF08\u8986\u76D6\u5FEB\u6377 flags\uFF09").action(apiCreate);
+program2.command("ds-api-update <idOrKey>").description("\u66F4\u65B0\u63A5\u53E3\uFF08\u6309\u952E\u5408\u5E76\uFF1BCLI \u81EA\u52A8\u8865 dataGroup\u2014\u2014\u5E73\u53F0 PATCH \u7F3A\u5B83\u76F4\u63A5 500\uFF09").option("-n, --name <name>", "\u540D\u79F0").option("--group <id|name>", "\u8FC1\u79FB\u5230\u5176\u4ED6\u5206\u7EC4").option("-p, --param <name=type...>", "\u53C2\u6570\u5B9A\u4E49\uFF08\u6574\u4F53\u66FF\u6362 variableSchema\uFF09").option("--json <json>", "setting \u5B8C\u6574 JSON\uFF08\u6574\u4F53\u66FF\u6362\uFF09").action(apiUpdate);
+program2.command("ds-api-delete <idOrKey>").description("\u5220\u9664\u63A5\u53E3").action(apiDelete);
+addOutput(program2.command("ds-api-exec <key>").description("\u6267\u884C\u6570\u636E\u63A5\u53E3\uFF0C\u8FD4\u56DE\u7ED3\u679C").option("-p, --param <k=v...>", "\u53C2\u6570\u503C\uFF08\u53EF\u591A\u4E2A\uFF0C\u503C\u6309 JSON \u89E3\u6790\u540E\u56DE\u9000\u5B57\u7B26\u4E32\uFF0C\u5982 --param limit=2)").option("--json <json>", "\u53C2\u6570\u4F53 JSON\uFF08\u4E0E --param \u5408\u5E76\uFF09").option("--debug", "\u670D\u52A1\u7AEF debug \u6A21\u5F0F\u6267\u884C")).action(apiExec);
 addOutput(program2.command("control-send").description("\u53D1\u9001\u8BBE\u5907\u6307\u4EE4").requiredOption("--table <tableId>", "\u8868ID").requiredOption("--device <id>", "\u8BBE\u5907ID").requiredOption("--command <name>", "\u6307\u4EE4\u540D\u79F0").option("--params <json>", "\u6307\u4EE4\u53C2\u6570\uFF08\u8868\u5355\u5199\u5165\u65F6\u5FC5\u586B\uFF09")).action(controlSend);
 addOutput(program2.command("control-batch").description("\u6279\u91CF\u63A7\u5236").option("--file <path>", "\u4ECE\u6587\u4EF6\u8BFB\u53D6").option("--json <json>", "JSON \u6570\u636E")).action(controlBatch);
 addOutput(program2.command("reports").alias("rpt").description("\u62A5\u8868\u5217\u8868").option("-f, --filter <json>", "\u8FC7\u6EE4").option("-l, --limit <number>", "\u6570\u91CF\u9650\u5236")).action(reportsList);
