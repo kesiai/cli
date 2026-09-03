@@ -345,9 +345,45 @@ export class KesiApiClient {
     await this.http.patch(`/warning/warning/${id}`, data);
   }
 
+  /** 手动创建报警（level 是中文字符串 低/中/高；table/tableData 用 {id} 对象形态，服务端增富为完整文档——真机 2026-09-03 验证） */
+  async createWarning(data: any): Promise<string> {
+    const res = await this.http.post('/warning/warning', data);
+    return (res.data as any)?.InsertedID || (res.data as any)?.id || '';
+  }
+
+  /** 报警统计（按表计数数组；真路径是 /stats，/statistics 返回空对象——2026-09-03 真机验证） */
   async getWarningStatistics(): Promise<any> {
-    const res = await this.http.get('/warning/warning/statistics');
-    return res.data || {};
+    const res = await this.http.get('/warning/warning/stats');
+    return res.data || [];
+  }
+
+  /** 归档库（一键归档移入的报警；主列表不再可见。⚠️ 不带 project 时只返回 id——必须投影） */
+  async getArchivedWarnings(params?: Record<string, any>): Promise<any> {
+    const project = {
+      id: 1, time: 1, level: 1, status: 1, processed: 1,
+      table: 1, tableDataId: 1, desc: 1, confirmUser: 1, confirmTime: 1,
+    };
+    const res = await this.http.get('/warning/warning/archive', {
+      params: { query: JSON.stringify({ ...params, project }) },
+    });
+    return res.data ?? [];
+  }
+
+  /** 一键归档：按 filter 移入归档库。平台返回消息字符串（如「归档报警数据指令下发成功」），无影响条数 */
+  async instantArchiveWarnings(filter?: any): Promise<string> {
+    const q = filter ? `?query=${encodeURIComponent(JSON.stringify({ filter }))}` : '';
+    const res = await this.http.get(`/warning/warning/instantArchive${q}`);
+    return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+  }
+
+  /** 归档恢复：把归档库的报警移回主列表（真机 2026-09-03 验证） */
+  async restoreArchivedWarning(id: string): Promise<void> {
+    await this.http.patch(`/warning/warning/archive/restore/${id}`);
+  }
+
+  /** 删除主列表报警（归档库无 DELETE 端点，只能先 restore 再删——真机 2026-09-03 验证） */
+  async deleteWarning(id: string): Promise<void> {
+    await this.http.delete(`/warning/warning/${id}`);
   }
 
   async getLatestWarnings(limit = 10): Promise<any[]> {
@@ -361,10 +397,6 @@ export class KesiApiClient {
     // 降级：用 list + 时间倒序
     const result = await this.getWarnings({ limit, sort: { time: -1 } });
     return result.list;
-  }
-
-  async batchConfirmWarnings(data: any): Promise<void> {
-    await this.http.post('/warning/warning/batch-confirm', data);
   }
 
   // ==================== 文件 ====================

@@ -46,7 +46,7 @@ $K data-history --device <id> --tag <tagId> \
 ### 设备控制
 
 ```bash
-$K control-send --device <id> --tag <tag> --value <val>  # 单个控制
+$K control-send --table <t> --device <id> --command <name> [--params '{}']  # 单个控制
 $K control-batch --file commands.json                     # 批量控制
 ```
 

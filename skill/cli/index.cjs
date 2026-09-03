@@ -21115,9 +21115,48 @@ var KesiApiClient = class {
   async updateWarning(id, data) {
     await this.http.patch(`/warning/warning/${id}`, data);
   }
+  /** 手动创建报警（level 是中文字符串 低/中/高；table/tableData 用 {id} 对象形态，服务端增富为完整文档——真机 2026-09-03 验证） */
+  async createWarning(data) {
+    const res = await this.http.post("/warning/warning", data);
+    return res.data?.InsertedID || res.data?.id || "";
+  }
+  /** 报警统计（按表计数数组；真路径是 /stats，/statistics 返回空对象——2026-09-03 真机验证） */
   async getWarningStatistics() {
-    const res = await this.http.get("/warning/warning/statistics");
-    return res.data || {};
+    const res = await this.http.get("/warning/warning/stats");
+    return res.data || [];
+  }
+  /** 归档库（一键归档移入的报警；主列表不再可见。⚠️ 不带 project 时只返回 id——必须投影） */
+  async getArchivedWarnings(params) {
+    const project = {
+      id: 1,
+      time: 1,
+      level: 1,
+      status: 1,
+      processed: 1,
+      table: 1,
+      tableDataId: 1,
+      desc: 1,
+      confirmUser: 1,
+      confirmTime: 1
+    };
+    const res = await this.http.get("/warning/warning/archive", {
+      params: { query: JSON.stringify({ ...params, project }) }
+    });
+    return res.data ?? [];
+  }
+  /** 一键归档：按 filter 移入归档库。平台返回消息字符串（如「归档报警数据指令下发成功」），无影响条数 */
+  async instantArchiveWarnings(filter2) {
+    const q = filter2 ? `?query=${encodeURIComponent(JSON.stringify({ filter: filter2 }))}` : "";
+    const res = await this.http.get(`/warning/warning/instantArchive${q}`);
+    return typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+  }
+  /** 归档恢复：把归档库的报警移回主列表（真机 2026-09-03 验证） */
+  async restoreArchivedWarning(id) {
+    await this.http.patch(`/warning/warning/archive/restore/${id}`);
+  }
+  /** 删除主列表报警（归档库无 DELETE 端点，只能先 restore 再删——真机 2026-09-03 验证） */
+  async deleteWarning(id) {
+    await this.http.delete(`/warning/warning/${id}`);
   }
   async getLatestWarnings(limit = 10) {
     try {
@@ -21129,9 +21168,6 @@ var KesiApiClient = class {
     }
     const result = await this.getWarnings({ limit, sort: { time: -1 } });
     return result.list;
-  }
-  async batchConfirmWarnings(data) {
-    await this.http.post("/warning/warning/batch-confirm", data);
   }
   // ==================== 文件 ====================
   async uploadFile(file, filename, mimeType, catalog) {
@@ -22163,9 +22199,9 @@ function validateRecordData(properties, merged, touched) {
     if (f.type === "number" && typeof val !== "number") {
       errors.push(`\u5B57\u6BB5 "${key}" \u671F\u671B number\uFF0C\u5B9E\u9645 ${typeof val}(${JSON.stringify(val)})`);
     }
-    if (f.type === "number" && typeof val === "number" && !Number.isInteger(val)) {
+    if (f.type === "number" && typeof val === "number" && !Number.isInteger(val) && f.dbType !== "Double") {
       errors.push(
-        `\u5B57\u6BB5 "${key}" \u503C ${val} \u542B\u5C0F\u6570\uFF1A\u5E73\u53F0\u4F1A\u628A number \u5B57\u6BB5\u622A\u65AD\u4E3A\u6574\u6570\u5B58\u50A8\uFF08\u5199 ${val} \u5B9E\u9645\u5B58 ${Math.trunc(val)}\uFF09\uFF0C\u62D2\u7EDD\u5199\u5165\u4EE5\u514D\u9759\u9ED8\u4E22\u7CBE\u5EA6\u2014\u2014\u8BF7\u6539\u7528\u6574\u6570\uFF0C\u6216\u4E0E\u5E73\u53F0\u65B9\u786E\u8BA4\u5C0F\u6570\u652F\u6301\u540E\u518D\u5199`
+        `\u5B57\u6BB5 "${key}" \u503C ${val} \u542B\u5C0F\u6570\uFF1A\u8BE5\u5B57\u6BB5 dbType=${f.dbType || "(\u672A\u8BBE)"}\uFF0C\u5E73\u53F0\u6309\u6574\u6570\u5B58\u50A8\uFF08\u5199 ${val} \u5B9E\u9645\u5B58 ${Math.trunc(val)}\uFF09\uFF0C\u62D2\u7EDD\u5199\u5165\u4EE5\u514D\u9759\u9ED8\u4E22\u7CBE\u5EA6\u2014\u2014\u9700\u8981\u5C0F\u6570\u8BF7\u628A\u5B57\u6BB5 dbType \u8BBE\u4E3A "Double"\uFF08\u8868 schema \u8BE5\u5B57\u6BB5\u52A0 "dbType":"Double"\uFF09\uFF0C\u6216\u6539\u7528\u6574\u6570`
       );
     }
   }
@@ -22349,6 +22385,17 @@ async function dataHistory(options) {
 }
 
 // src/commands/warning.ts
+var LEVELS = ["\u4F4E", "\u4E2D", "\u9AD8"];
+function parseLevel(raw) {
+  if (!raw || !LEVELS.includes(raw)) {
+    throw new Error(`\u62A5\u8B66\u7EA7\u522B\u5FC5\u987B\u662F ${LEVELS.join("/")}\uFF08\u4E2D\u6587\u5B57\u7B26\u4E32\uFF0C\u5E73\u53F0 schema \u4E0D\u6536\u6570\u5B57\uFF09\uFF0C\u6536\u5230: "${raw}"`);
+  }
+  return raw;
+}
+function confirmUser(userId) {
+  const id = userId || "admin";
+  return { id, name: id };
+}
 async function warningRulesList(options) {
   await executeCommand(async () => {
     const client = getApiClient();
@@ -22367,11 +22414,11 @@ async function warningRulesGet(id, options) {
   });
 }
 function parseRuleLevel(raw) {
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1 || n > 4) {
-    throw new Error(`\u62A5\u8B66\u7EA7\u522B level \u5FC5\u987B\u662F 1-4 \u6574\u6570\uFF081\u63D0\u793A/2\u4E00\u822C/3\u91CD\u8981/4\u4E25\u91CD\uFF09\uFF0C\u6536\u5230: "${raw}"`);
+  if (!raw) return "\u4F4E";
+  if (!LEVELS.includes(raw)) {
+    throw new Error(`\u89C4\u5219\u7EA7\u522B\u5FC5\u987B\u662F ${LEVELS.join("/")}\uFF08\u4E2D\u6587\u5B57\u7B26\u4E32\uFF09\uFF0C\u6536\u5230: "${raw}"`);
   }
-  return n;
+  return raw;
 }
 async function warningRulesCreate(options) {
   await executeCommand(async () => {
@@ -22411,12 +22458,18 @@ async function warningRulesDelete(id) {
 async function warningsList(options) {
   await executeCommand(async () => {
     const client = getApiClient();
+    if (options.archived) {
+      const result2 = await client.getArchivedWarnings(normalizeQueryOptions(options));
+      const format2 = resolveOutputFormat(options.output);
+      console.log(formatOutput(result2, format2));
+      return;
+    }
     const params = normalizeQueryOptions(options);
     if (options.level) params.filter = { ...params.filter, level: options.level };
     if (options.status) params.filter = { ...params.filter, status: options.status };
     if (options.processed) params.filter = { ...params.filter, processed: options.processed };
-    if (options.tableId) params.filter = { ...params.filter, "table.id": { $eq: options.tableId } };
-    if (options.deviceId) params.filter = { ...params.filter, tableDataId: { $eq: options.deviceId } };
+    if (options.tableId) params.filter = { ...params.filter, table: { id: options.tableId } };
+    if (options.deviceId) params.filter = { ...params.filter, tableDataId: options.deviceId };
     if (options.keyword) params.filter = { ...params.filter, desc: { $regex: options.keyword } };
     const result = await client.getWarnings(params);
     const format = resolveOutputFormat(options.output);
@@ -22431,25 +22484,52 @@ async function warningGet(id, options) {
     console.log(formatOutput(result, format));
   });
 }
+async function warningCreate(options) {
+  await executeCommand(async () => {
+    if (!options.desc) throw new Error("\u62A5\u8B66\u63CF\u8FF0\u4E0D\u80FD\u4E3A\u7A7A\uFF08-d\uFF09");
+    const client = getApiClient();
+    const data = { desc: options.desc, level: parseLevel(options.level) };
+    if (options.table) data.table = { id: options.table };
+    if (options.device) data.tableData = { id: options.device };
+    const id = await client.createWarning(data);
+    console.log(formatSuccess(`\u62A5\u8B66\u5DF2\u521B\u5EFA\uFF1A${id}\uFF08level=${data.level}\uFF1B\u786E\u8BA4\u7528 warnings confirm\uFF0C\u5904\u7406\u7528 warnings handle\uFF09`));
+    const created = await client.getWarningById(id);
+    const format = resolveOutputFormat(options.output);
+    console.log(formatOutput(created, format));
+  });
+}
+async function warningRestore(id) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    await client.restoreArchivedWarning(id);
+    console.log(formatSuccess(`\u5DF2\u6062\u590D\u5230\u4E3B\u5217\u8868\uFF1A${id}`));
+  });
+}
+async function warningDelete(id) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    await client.deleteWarning(id);
+    console.log(formatSuccess(`\u62A5\u8B66\u5DF2\u5220\u9664\uFF1A${id}`));
+  });
+}
 async function warningConfirm(id, options) {
   await executeCommand(async () => {
     const client = getApiClient();
     await client.updateWarning(id, {
-      status: 1,
-      confirmNote: options.note,
-      confirmUser: options.userId
+      status: "\u5DF2\u786E\u8BA4",
+      confirmUser: confirmUser(options.userId)
     });
-    console.log(formatSuccess("\u5DF2\u786E\u8BA4"));
+    console.log(formatSuccess("\u5DF2\u786E\u8BA4\uFF08status=\u5DF2\u786E\u8BA4\uFF0C\u5E73\u53F0\u81EA\u52A8\u8BB0\u5F55 confirmTime\uFF09"));
   });
 }
-async function warningResolve(id, options) {
+async function warningHandle(id, options) {
   await executeCommand(async () => {
     const client = getApiClient();
     await client.updateWarning(id, {
-      status: 2,
-      recoverNote: options.note
+      processed: "\u5DF2\u5904\u7406",
+      confirmUser: confirmUser(options.userId)
     });
-    console.log(formatSuccess("\u5DF2\u6807\u8BB0\u6062\u590D"));
+    console.log(formatSuccess("\u5DF2\u5904\u7406\uFF08processed=\u5DF2\u5904\u7406\uFF09"));
   });
 }
 async function warningsStats(options) {
@@ -22471,12 +22551,29 @@ async function warningsLatest(options) {
 async function warningsBatchConfirm(ids, options) {
   await executeCommand(async () => {
     const client = getApiClient();
-    await client.batchConfirmWarnings({
-      ids,
-      note: options.note,
-      userId: options.userId
-    });
-    console.log(formatSuccess(`\u5DF2\u786E\u8BA4 ${ids.length} \u6761\u62A5\u8B66`));
+    let done = 0;
+    for (const id of ids) {
+      await client.updateWarning(id, { status: "\u5DF2\u786E\u8BA4", confirmUser: confirmUser(options.userId) });
+      done++;
+    }
+    console.log(formatSuccess(`\u5DF2\u786E\u8BA4 ${done}/${ids.length} \u6761\u62A5\u8B66`));
+  });
+}
+async function warningsArchive(options) {
+  await executeCommand(async () => {
+    const client = getApiClient();
+    const filter2 = {};
+    if (options.status) {
+      if (!["\u5DF2\u786E\u8BA4", "\u672A\u786E\u8BA4"].includes(options.status)) throw new Error("--status \u53EA\u652F\u6301 \u5DF2\u786E\u8BA4/\u672A\u786E\u8BA4");
+      filter2.status = options.status;
+    }
+    if (options.processed) {
+      if (!["\u5DF2\u5904\u7406", "\u672A\u5904\u7406"].includes(options.processed)) throw new Error("--processed \u53EA\u652F\u6301 \u5DF2\u5904\u7406/\u672A\u5904\u7406");
+      filter2.processed = options.processed;
+    }
+    if (options.table) filter2.table = { id: options.table };
+    const msg = await client.instantArchiveWarnings(Object.keys(filter2).length > 0 ? filter2 : void 0);
+    console.log(formatSuccess(`\u5F52\u6863\u5B8C\u6210\uFF08\u5E73\u53F0\u8FD4\u56DE\uFF1A${msg}\uFF09\u2014\u2014\u7528 warnings list --archived \u67E5\u5F52\u6863\u5E93\uFF0Cwarnings restore <id> \u79FB\u56DE`));
   });
 }
 
@@ -24212,13 +24309,17 @@ rules.command("create").description("\u521B\u5EFA\u89C4\u5219").requiredOption("
 rules.command("update <id>").description("\u66F4\u65B0\u89C4\u5219").option("-n, --name <name>", "\u89C4\u5219\u540D\u79F0").option("-l, --level <number>", "\u62A5\u8B66\u7EA7\u522B").option("-e, --enable <boolean>", "\u662F\u5426\u542F\u7528").option("-d, --description <text>", "\u63CF\u8FF0").action(warningRulesUpdate);
 rules.command("delete <id>").description("\u5220\u9664\u89C4\u5219").action(warningRulesDelete);
 var warnings = program2.command("warnings").alias("w").description("\u62A5\u8B66\u7BA1\u7406");
-addOutput(warnings.command("list").alias("ls").description("\u67E5\u8BE2\u62A5\u8B66\u5217\u8868").option("-f, --filter <json>", "\u8FC7\u6EE4\u6761\u4EF6").option("-l, --limit <number>", "\u6570\u91CF\u9650\u5236").option("--with-count", "\u8FD4\u56DE\u603B\u6570").option("--level <text>", "\u7EA7\u522B\uFF1A\u4F4E/\u4E2D/\u9AD8").option("--status <text>", "\u786E\u8BA4\u72B6\u6001\uFF1A\u672A\u786E\u8BA4/\u5DF2\u786E\u8BA4").option("--processed <text>", "\u5904\u7406\u72B6\u6001\uFF1A\u672A\u5904\u7406/\u5DF2\u5904\u7406").option("--table-id <id>", "\u6309\u6570\u636E\u8868ID\u8FC7\u6EE4").option("--device-id <id>", "\u6309\u8BBE\u5907ID\u8FC7\u6EE4").option("--keyword <text>", "\u5173\u952E\u8BCD\u641C\u7D22\uFF08\u5339\u914D\u62A5\u8B66\u63CF\u8FF0\uFF09")).action(warningsList);
+addOutput(warnings.command("list").alias("ls").description("\u67E5\u8BE2\u62A5\u8B66\u5217\u8868").option("-f, --filter <json>", "\u8FC7\u6EE4\u6761\u4EF6").option("-l, --limit <number>", "\u6570\u91CF\u9650\u5236").option("--with-count", "\u8FD4\u56DE\u603B\u6570").option("--level <text>", "\u7EA7\u522B\uFF1A\u4F4E/\u4E2D/\u9AD8").option("--status <text>", "\u786E\u8BA4\u72B6\u6001\uFF1A\u672A\u786E\u8BA4/\u5DF2\u786E\u8BA4").option("--processed <text>", "\u5904\u7406\u72B6\u6001\uFF1A\u672A\u5904\u7406/\u5DF2\u5904\u7406").option("--table-id <id>", "\u6309\u6570\u636E\u8868ID\u8FC7\u6EE4").option("--device-id <id>", "\u6309\u8BBE\u5907ID\u8FC7\u6EE4").option("--keyword <text>", "\u5173\u952E\u8BCD\u641C\u7D22\uFF08\u5339\u914D\u62A5\u8B66\u63CF\u8FF0\uFF09").option("--archived", "\u67E5\u5F52\u6863\u5E93\uFF08\u4E00\u952E\u5F52\u6863/\u5B9A\u65F6\u5F52\u6863\u79FB\u5165\u7684\u62A5\u8B66\uFF09")).action(warningsList);
 addOutput(warnings.command("get <id>").description("\u62A5\u8B66\u8BE6\u60C5")).action(warningGet);
-warnings.command("confirm <id>").description("\u786E\u8BA4\u62A5\u8B66").option("-n, --note <text>", "\u5907\u6CE8").option("--user-id <id>", "\u7528\u6237ID").action(warningConfirm);
-warnings.command("resolve <id>").alias("rv").description("\u6807\u8BB0\u6062\u590D").option("-n, --note <text>", "\u5907\u6CE8").action(warningResolve);
-addOutput(warnings.command("stats").description("\u62A5\u8B66\u7EDF\u8BA1")).action(warningsStats);
+addOutput(warnings.command("create").description("\u624B\u52A8\u521B\u5EFA\u62A5\u8B66").option("-d, --desc <text>", "\u62A5\u8B66\u63CF\u8FF0\uFF08\u5FC5\u586B\uFF09").option("-l, --level <text>", "\u7EA7\u522B\uFF1A\u4F4E/\u4E2D/\u9AD8\uFF08\u5FC5\u586B\uFF0C\u4E2D\u6587\u5B57\u7B26\u4E32\uFF09").option("--table <id>", "\u5173\u8054\u8868ID").option("--device <id>", "\u5173\u8054\u8BBE\u5907/\u8BB0\u5F55ID")).action(warningCreate);
+warnings.command("confirm <id>").description("\u786E\u8BA4\u62A5\u8B66\uFF08status=\u5DF2\u786E\u8BA4\uFF09").option("--user-id <id>", "\u64CD\u4F5C\u4EBAID\uFF08\u9ED8\u8BA4 admin\uFF09").action(warningConfirm);
+warnings.command("handle <id>").description("\u5904\u7406\u62A5\u8B66\uFF08processed=\u5DF2\u5904\u7406\uFF09").option("--user-id <id>", "\u64CD\u4F5C\u4EBAID\uFF08\u9ED8\u8BA4 admin\uFF09").action(warningHandle);
+addOutput(warnings.command("stats").description("\u62A5\u8B66\u7EDF\u8BA1\uFF08\u6309\u8868\u8BA1\u6570\uFF1B\u771F\u8DEF\u5F84 /stats\uFF09")).action(warningsStats);
+addOutput(warnings.command("archive").description("\u4E00\u952E\u5F52\u6863\uFF08\u6309\u6761\u4EF6\u79FB\u5165\u5F52\u6863\u5E93\uFF0C\u4E3B\u5217\u8868\u6D88\u5931\uFF1B\u65E0\u6761\u4EF6=\u5F52\u6863\u5168\u90E8\uFF09").option("--status <text>", "\u53EA\u5F52\u6863\u8BE5\u786E\u8BA4\u72B6\u6001\uFF1A\u5DF2\u786E\u8BA4/\u672A\u786E\u8BA4").option("--processed <text>", "\u53EA\u5F52\u6863\u8BE5\u5904\u7406\u72B6\u6001\uFF1A\u5DF2\u5904\u7406/\u672A\u5904\u7406").option("--table <id>", "\u53EA\u5F52\u6863\u8BE5\u8868\uFF08id \u6216\u540D\u79F0\uFF09")).action(warningsArchive);
+warnings.command("restore <id>").description("\u5F52\u6863\u6062\u590D\uFF08\u628A\u5F52\u6863\u5E93\u7684\u62A5\u8B66\u79FB\u56DE\u4E3B\u5217\u8868\uFF09").action(warningRestore);
+warnings.command("delete <id>").description("\u5220\u9664\u62A5\u8B66\uFF08\u4EC5\u4E3B\u5217\u8868\uFF1B\u5F52\u6863\u5E93\u7684\u5148 restore \u518D\u5220\uFF09").action(warningDelete);
 addOutput(warnings.command("latest").description("\u6700\u65B0\u62A5\u8B66").option("-l, --limit <number>", "\u6570\u91CF", "10")).action(warningsLatest);
-warnings.command("batch-confirm <ids...>").description("\u6279\u91CF\u786E\u8BA4").option("-n, --note <text>", "\u5907\u6CE8").option("--user-id <id>", "\u7528\u6237ID").action(warningsBatchConfirm);
+warnings.command("batch-confirm <ids...>").description("\u6279\u91CF\u786E\u8BA4\uFF08\u5E73\u53F0\u65E0\u6279\u91CF\u7AEF\u70B9\uFF0C\u9010\u6761\u6267\u884C\uFF09").option("--user-id <id>", "\u64CD\u4F5C\u4EBAID\uFF08\u9ED8\u8BA4 admin\uFF09").action(warningsBatchConfirm);
 program2.command("file-upload <filePath>").description("\u4E0A\u4F20\u6587\u4EF6\u5230\u5A92\u4F53\u5E93\uFF08\u8FD4\u56DE {url}\uFF1B\u5E73\u53F0\u65E0\u5220\u9664\u7AEF\u70B9\uFF0C\u4E0A\u4F20\u4E0D\u53EF\u9006\uFF09").option("--name <name>", "\u6587\u4EF6\u540D").option("--mime <type>", "MIME\u7C7B\u578B").option("--catalog <path>", "\u76EE\u6807\u76EE\u5F55 path\uFF08media-dirs \u67E5\uFF1B\u4E0D\u4F20\u843D\u5728\u6587\u4EF6\u670D\u52A1\u6839\uFF0C\u5A92\u4F53\u5E93\u9875\u4E0D\u53EF\u89C1\uFF09").action(fileUpload);
 addOutput(program2.command("media-dirs").description("\u5A92\u4F53\u5E93\u5168\u91CF\u76EE\u5F55\u6811")).action(mediaDirs);
 addOutput(program2.command("media-ls [path]").description("\u5A92\u4F53\u5E93\u76EE\u5F55\u5185\u5BB9\uFF08path \u4E3A\u76EE\u5F55 path\uFF1B\u4E0D\u4F20=\u6839\u5217\u8868\uFF09")).action(mediaLs);

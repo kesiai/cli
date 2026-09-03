@@ -126,7 +126,7 @@
 | 属性 | 类型 | 说明 |
 |------|------|------|
 | `key` | string | 字段标识符 |
-| `type` | string | JSON 类型：`string` / `number` / `boolean` / `object` / `array`。⚠️ `number` 字段平台只存整数（小数会被截断，CLI 写入小数时直接拦截） |
+| `type` | string | JSON 类型：`string` / `number` / `boolean` / `object` / `array`。⚠️ `number` 字段默认整数存储，小数需字段设 `dbType: "Double"`（见下） |
 | `controlType` | string | 控件类型，详见 [controls/](controls/) |
 | `title` | string | 显示名称 |
 | `need` | boolean | 是否必填 |
@@ -135,6 +135,7 @@
 | `enum` | array | 选项值列表（select 类型使用） |
 | `enumNames` | array | 选项显示名列表（与 enum 一一对应） |
 | `relate` | object | 关联配置（relate 类型使用） |
+| `dbType` | string | number 字段的数据库存储类型：`"Int32"` / `"Int64"` / `"Double"`。**只有 `Double` 支持小数**（float64 完整保留）；未设=整数且 REST 拒小数；`Float`/`Decimal` 平台不识别会静默截断。详见 [controls/number.md](controls/number.md) |
 | `config` | object | 控件特殊配置 |
 | `defaultVal` | any | 默认值 |
 

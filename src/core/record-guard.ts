@@ -42,10 +42,13 @@ export function validateRecordData(
     if (f.type === 'number' && typeof val !== 'number') {
       errors.push(`字段 "${key}" 期望 number，实际 ${typeof val}(${JSON.stringify(val)})`);
     }
-    // 平台实测：number 字段的小数会被后端截断为整数存储（写 2.5 读回 2，PATCH 同样），静默丢精度——写前拦截
-    if (f.type === 'number' && typeof val === 'number' && !Number.isInteger(val)) {
+    // 平台实测（2026-09-03）：number 字段按 dbType 决定服务端 Go 类型——
+    //   dbType:'Double' → float64，小数完整保留；未设 → int（REST 直接拒 unmarshal）；
+    //   Int32/Int64 → 整数；Float/Decimal 平台不识别，回落整数存储（静默截断）。
+    // 小数只对 dbType:'Double' 放行，其余写前拦截（静默丢精度/被拒都不如写前说清）。
+    if (f.type === 'number' && typeof val === 'number' && !Number.isInteger(val) && f.dbType !== 'Double') {
       errors.push(
-        `字段 "${key}" 值 ${val} 含小数：平台会把 number 字段截断为整数存储（写 ${val} 实际存 ${Math.trunc(val)}），拒绝写入以免静默丢精度——请改用整数，或与平台方确认小数支持后再写`,
+        `字段 "${key}" 值 ${val} 含小数：该字段 dbType=${f.dbType || '(未设)'}，平台按整数存储（写 ${val} 实际存 ${Math.trunc(val)}），拒绝写入以免静默丢精度——需要小数请把字段 dbType 设为 "Double"（表 schema 该字段加 "dbType":"Double"），或改用整数`,
       );
     }
   }

@@ -15,10 +15,13 @@ $K rules update <id>             # 更新规则
 $K rules delete <id>             # 删除规则
 
 # 报警事件管理
-$K warnings list                 # 报警列表
+$K warnings list                 # 报警列表（--archived 查归档库）
 $K warnings get <id>             # 报警详情
-$K warnings confirm <id>         # 确认报警
-$K warnings resolve <id>         # 标记恢复
+$K warnings create -d <描述> -l 高 # 手动创建报警
+$K warnings confirm <id>         # 确认报警（status=已确认）
+$K warnings handle <id>          # 处理报警（processed=已处理）
+$K warnings archive [--status 已确认] # 一键归档
+$K warnings restore <id>         # 归档恢复（移回主列表）
 $K warnings stats                # 报警统计
 ```
 

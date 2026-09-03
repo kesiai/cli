@@ -213,14 +213,28 @@ addOutput(warnings.command('list').alias('ls').description('查询报警列表')
   .option('--processed <text>', '处理状态：未处理/已处理')
   .option('--table-id <id>', '按数据表ID过滤')
   .option('--device-id <id>', '按设备ID过滤')
-  .option('--keyword <text>', '关键词搜索（匹配报警描述）'))
+  .option('--keyword <text>', '关键词搜索（匹配报警描述）')
+  .option('--archived', '查归档库（一键归档/定时归档移入的报警）'))
   .action(warning.warningsList);
 addOutput(warnings.command('get <id>').description('报警详情')).action(warning.warningGet);
-warnings.command('confirm <id>').description('确认报警').option('-n, --note <text>', '备注').option('--user-id <id>', '用户ID').action(warning.warningConfirm);
-warnings.command('resolve <id>').alias('rv').description('标记恢复').option('-n, --note <text>', '备注').action(warning.warningResolve);
-addOutput(warnings.command('stats').description('报警统计')).action(warning.warningsStats);
+addOutput(warnings.command('create').description('手动创建报警')
+  .option('-d, --desc <text>', '报警描述（必填）')
+  .option('-l, --level <text>', '级别：低/中/高（必填，中文字符串）')
+  .option('--table <id>', '关联表ID')
+  .option('--device <id>', '关联设备/记录ID'))
+  .action(warning.warningCreate);
+warnings.command('confirm <id>').description('确认报警（status=已确认）').option('--user-id <id>', '操作人ID（默认 admin）').action(warning.warningConfirm);
+warnings.command('handle <id>').description('处理报警（processed=已处理）').option('--user-id <id>', '操作人ID（默认 admin）').action(warning.warningHandle);
+addOutput(warnings.command('stats').description('报警统计（按表计数；真路径 /stats）')).action(warning.warningsStats);
+addOutput(warnings.command('archive').description('一键归档（按条件移入归档库，主列表消失；无条件=归档全部）')
+  .option('--status <text>', '只归档该确认状态：已确认/未确认')
+  .option('--processed <text>', '只归档该处理状态：已处理/未处理')
+  .option('--table <id>', '只归档该表（id 或名称）'))
+  .action(warning.warningsArchive);
+warnings.command('restore <id>').description('归档恢复（把归档库的报警移回主列表）').action(warning.warningRestore);
+warnings.command('delete <id>').description('删除报警（仅主列表；归档库的先 restore 再删）').action(warning.warningDelete);
 addOutput(warnings.command('latest').description('最新报警').option('-l, --limit <number>', '数量', '10')).action(warning.warningsLatest);
-warnings.command('batch-confirm <ids...>').description('批量确认').option('-n, --note <text>', '备注').option('--user-id <id>', '用户ID').action(warning.warningsBatchConfirm);
+warnings.command('batch-confirm <ids...>').description('批量确认（平台无批量端点，逐条执行）').option('--user-id <id>', '操作人ID（默认 admin）').action(warning.warningsBatchConfirm);
 
 // ==================== 文件 / 媒体库 ====================
 

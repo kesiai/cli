@@ -119,7 +119,7 @@ $K records devices -f 'name~空调' -l 5        # 模糊搜索
 
 | 命令 | 说明 |
 |------|------|
-| `$K control-send --device <id> --tag <tag> --value <val>` | 单个控制 |
+| `$K control-send --table <t> --device <id> --command <name> [--params '{}']` | 单个控制（表单写入必带 --params） |
 | `$K control-batch --file commands.json` | 批量控制 |
 
 ### 在线统计
@@ -149,30 +149,33 @@ $K records devices -f 'name~空调' -l 5        # 模糊搜索
 
 ## 报警系统
 
-### 报警规则
+> 表级报警规则（嵌在表 schema `warning.rules`）随表定义，详见 [references/device-warning-rule.md](references/device-warning-rule.md)；这里是独立规则与报警事件命令。
+
+### 独立报警规则（warning/rule 集合）
 
 | 命令 | 说明 |
 |------|------|
-| `$K warning-rules <tableId>` | 查看表的报警规则 |
-| `$K warning-rule <tableId> <ruleId>` | 查看单条报警规则 |
-| `$K warning-rule-create --file rule.json` | 创建报警规则 |
-| `$K warning-rule-update <id> --file rule.json` | 修改报警规则 |
-| `$K warning-rule-delete <id>` | 删除报警规则 |
+| `$K rules list [-f filter] [-l limit]` | 规则列表 |
+| `$K rules get <id>` | 规则详情 |
+| `$K rules create -n <名> -l <1-4>` | 创建规则（level 数字 1提示/2一般/3重要/4严重） |
+| `$K rules update <id> [-n] [-l]` | 更新规则 |
+| `$K rules delete <id>` | 删除规则 |
 
-### 报警事件
-
-| 命令 | 说明 |
-|------|------|
-| `$K warnings [-f filter] [-l limit]` | 查询当前报警事件 |
-| `$K warning <id>` | 查看单条报警事件 |
-| `$K warning-handle <id> --handle-result <结果>` | 处理报警 |
-| `$K warning-archive <id>` | 归档报警 |
-
-### 报警统计
+### 报警事件（真机验证 2026-09-03）
 
 | 命令 | 说明 |
 |------|------|
-| `$K warning-stats --start <ms> --end <ms>` | 报警统计 |
+| `$K warnings list [--level/--status/--processed/--table-id/--device-id/--keyword]` | 查询报警（中文枚举：低/中/高、未确认/已确认、未处理/已处理） |
+| `$K warnings list --archived` | 查归档库 |
+| `$K warnings get <id>` | 报警详情 |
+| `$K warnings create -d <描述> -l <低/中/高> [--table --device]` | 手动创建报警 |
+| `$K warnings confirm <id>` | 确认（status=已确认） |
+| `$K warnings handle <id>` | 处理（processed=已处理） |
+| `$K warnings batch-confirm <id...>` | 批量确认（逐条执行） |
+| `$K warnings archive [--status --processed --table]` | 一键归档（移入归档库） |
+| `$K warnings restore <id>` | 归档恢复（移回主列表） |
+| `$K warnings stats` | 按表计数统计 |
+| `$K warnings latest [-l 10]` | 最新报警 |
 
 ---
 

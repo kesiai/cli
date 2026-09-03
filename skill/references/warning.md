@@ -16,10 +16,10 @@ $K rules list [-f filter] [-l limit] [--with-count]
 $K rules get <id>
 
 # 创建规则
-$K rules create -n "温度超限" -l 3 -e true -d "温度超过80度触发"
+$K rules create -n "温度超限" -l 高 -d "温度超过80度触发"
 
 # 更新规则
-$K rules update <id> -n "新名称" -l 2 --enable false
+$K rules update <id> -n "新名称" -l 中
 
 # 删除规则
 $K rules delete <id>
@@ -29,9 +29,9 @@ $K rules delete <id>
 
 | 参数 | 说明 |
 |------|------|
-| `-n` / `--name` | 规则名称（必填） |
-| `-l` / `--level` | 报警级别（必填）：1=提示 2=一般 3=重要 4=严重 |
-| `-e` / `--enable` | 是否启用 |
+| `-n` / `--name` | 规则名称（必填，重名 400 名称重复） |
+| `-l` / `--level` | 报警级别：`低` / `中` / `高`（⚠️ 中文字符串——发数字 400 `RuleTableSchema.level string`，真机验证） |
+| `-e` / `--enable` | 是否启用（默认 true；注意 GET 不回显该字段） |
 | `-d` / `--description` | 描述 |
 
 ### ⚠️ 表级报警规则 vs 独立报警规则
@@ -95,31 +95,47 @@ $K rules delete <id>
 
 ## 报警事件（Warnings）
 
-设备数据触发规则后产生的报警记录。
+设备数据触发规则后产生的报警记录；也支持手动创建（测试/补录场景）。
+
+### ⚠️ 触发语义（真机验证 2026-09-03）
+
+规则引擎**不消费 REST 写入的数据**：`core/data/save` 写入越限值（表级 jsonlogic 规则、点位级阈值规则均不触发）。报警只在驱动采集管线里自动产生——本部署无运行设备时，报警只能手动创建后走确认/处理/归档流程。
 
 ### ⚠️ 查询限制
 
-**`warning/warning` 不支持 `projectAll`**，查询时必须用 `project` 指定返回字段（MongoDB 投影格式）。CLI 已内置处理，无需手动指定。
+**`warning/warning` 不支持 `projectAll`**，查询时必须用 `project` 指定返回字段（MongoDB 投影格式）。CLI 已内置处理，无需手动指定。归档库同理（不带 project 只返回 id）。
 
-### 命令
+### 命令（真机验证 2026-09-03）
 
 ```bash
 # 列出报警
 $K warnings list [--level 低/中/高] [--status 未确认/已确认] [--processed 未处理/已处理] [--table-id <id>] [--device-id <id>] [--keyword <text>] [-l limit]
 
+# 查归档库（一键归档/定时归档移入的报警，主列表不再可见）
+$K warnings list --archived
+
 # 获取报警详情
 $K warnings get <id>
 
-# 确认报警（已知晓）
-$K warnings confirm <id> -n "已确认" --user-id <userId>
+# 手动创建报警（level 是中文字符串，发数字直接 400）
+$K warnings create -d "泵房温度超高" -l 高 --table <tableId> --device <recordId>
 
-# 解决报警
-$K warnings resolve <id> -n "已修复"
+# 确认报警（status → 已确认，平台自动记录 confirmTime）
+$K warnings confirm <id> [--user-id admin]
 
-# 批量确认
-$K warnings batch-confirm <id1> <id2> -n "批量确认"
+# 处理报警（processed → 已处理）
+$K warnings handle <id> [--user-id admin]
 
-# 报警统计
+# 批量确认（平台无批量端点，CLI 逐条执行）
+$K warnings batch-confirm <id1> <id2>
+
+# 一键归档：按条件移入归档库（无条件 = 归档全部）
+$K warnings archive [--status 已确认] [--processed 已处理] [--table <tableId>]
+
+# 归档恢复（把归档库的报警移回主列表）
+$K warnings restore <id>
+
+# 报警统计（按表计数数组；真路径 /stats）
 $K warnings stats
 
 # 最新报警（如后端不支持 /latest 端点，自动降级为 list + 时间倒序）
@@ -136,50 +152,31 @@ $K warnings latest [-l 10]
 | `level` | string | 级别：`"低"` / `"中"` / `"高"` |
 | `status` | string | 确认状态：`"未确认"` / `"已确认"` |
 | `processed` | string | 处理状态：`"未处理"` / `"已处理"` |
-| `handle` | boolean | 是否需要处理 |
-| `tableID` | string | ⚠️ 数据表 ID（注意：不是 `table` 对象） |
-| `tableDataID` | string | ⚠️ 设备 ID（注意：不是 `tableData` 对象，且大写 D） |
+| `table` | object | ⚠️ 数据表（服务端增富为完整表文档，`table.id` 取表 ID；过滤必须用 `{table:{id}}` 嵌套对象等值，`table.id` 点路径 400） |
+| `tableDataID` | string | ⚠️ 设备 ID（服务端从 `tableData` 对象派生，大写 D） |
 | `desc` | string | 报警描述 |
 | `remark` | string | 处理备注 |
 | `fields` | WarningField[] | 触发报警的点位列表（完整 tag 对象） |
-| `confirmUser` | {id, name} | 确认人 |
+| `confirmUser` | {id, name} | 确认人（服务端增富为完整用户文档） |
 | `confirmTime` | string | 确认时间 |
-| `handleUser` | {id, name} | 处理人 |
-| `handleTime` | string | 处理时间 |
+
+**创建时的关联字段用 `{id}` 对象形态**：`--table` → `table:{id}`、`--device` → `tableData:{id}`（服务端增富；发平铺 `tableId`/`tableDataId` 会被静默丢弃，真机验证）。
 
 ### 报警级别
 
-> ⚠️ 报警级别在不同场景下使用不同编码方式：
+全平台统一**中文字符串** `"低"` / `"中"` / `"高"`（独立规则集合与报警事件的 Go schema 都是 string，发数字一律 400——真机验证 2026-09-03；旧文档「CLI 独立规则用数字 1-4」是错的）。
 
-| 场景 | 编码方式 | 示例 |
-|------|----------|------|
-| **CLI `$K rules create`**（独立规则） | 数字 1-4 | `-l 3` |
-| **表级规则**（嵌入表 schema `warning.rules`） | 中文字符串 | `"低"` / `"中"` / `"高"` |
-| **前端报警事件**（`warning/warning` 查询结果） | 中文字符串 | `"低"` / `"中"` / `"高"` |
+### 报警状态流转（真机验证 2026-09-03）
 
-**数字编码（CLI 独立规则）：**
-
-| level | 名称 | 说明 |
-|-------|------|------|
-| 1 | 提示 | 一般信息通知 |
-| 2 | 一般 | 需要关注但不紧急 |
-| 3 | 重要 | 需要尽快处理 |
-| 4 | 严重 | 必须立即处理 |
-
-**中文字符串（表级规则 & 前端）：**
-
-| level | 说明 |
-|-------|------|
-| `"低"` | 低级别报警 |
-| `"中"` | 中级别报警 |
-| `"高"` | 高级别报警 |
-
-### 报警状态流转
+`status`（确认）与 `processed`（处理）是**两个独立维度**，都是中文字符串，没有数字编码、没有「已解决」态：
 
 ```
-未处理(0) → 已确认(1) → 已解决(2)
-                         ↘ 已关闭(3)
+status:    未确认 → 已确认            （warnings confirm）
+processed: 未处理 → 已处理            （warnings handle）
+任意状态   主列表 → 归档库 → 主列表    （warnings archive / restore）
 ```
+
+⚠️ 平台没有「恢复/解决」状态——旧文档的 `resolve`（status:2）是错误描述，已移除；「恢复」只指归档恢复（`warnings restore`）。
 
 ## 关联
 
