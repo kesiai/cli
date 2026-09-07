@@ -224,7 +224,7 @@ map(2)
 | `settable` | `settable` | 集合表配置：`{ table: [{ id, title }] }`（见 [table.md](table.md)） |
 | `syncSettings` | `syncSettings` | 第三方数据同步（⚠️ 需在前端配置） |
 | `dataSource` | `dataSource` | API 数据源（⚠️ 需在前端配置） |
-| `tablePermission` | `tablePermission` | 记录级权限（⚠️ 需在前端配置） |
+| `tablePermission` | `permissions` | 记录级权限（⚠️ 需在前端配置；配置键与功能 ID 不同名） |
 | `tableArchive` | `tableArchive` | 数据归档（⚠️ 需在前端配置） |
 | `tableClear` | `tableClear` | 数据清理（⚠️ 需在前端配置） |
 | `gis` | `gis` | 地理信息（⚠️ 需在前端配置） |
