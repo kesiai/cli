@@ -29,7 +29,9 @@ $K warnings stats                # 报警统计
 
 ## 查询报警类型（warningkind）
 
-创建报警规则前，用 `$K query-get core/setting` 查一次可用的报警类型。
+创建报警规则前，用 `$K setting`（系统设置整对象）查一次可用的报警类型，取 `warning.warningkind`。
+
+⚠️ 不要用 `query-get core/setting`（`query-get` 必须带 `<id>` 参数，裸资源名会被 CLI 直接拒掉）；也不要拿 `query core/setting` 凑（list 语义，返回空数组不是设置对象）。
 
 ⚠️ **`warning` 为 `null` / 无 `warningkind` 时（环境未配置）**：不要继续探测其它端点，直接按标准结构创建（不带 `type` 字段），并在最终报告注明「平台未配置报警类型，规则未关联 type」——平台接受这种规则。
 
@@ -175,7 +177,7 @@ $K warnings stats                # 报警统计
 |------|------|------|------|
 | `id` | string | ✅ | 规则标识 |
 | `warningname` | string | ✅ | 规则名称（⚠️ 字段名是 `warningname` 不是 `name`） |
-| `type` | string[] | ✅ | 报警类型 ID 数组，从 `/core/setting.warning.warningkind` 获取 |
+| `type` | string[] | ✅ | 报警类型 ID 数组，`$K setting` → `warning.warningkind` 里取 `id` |
 | `level` | string | | 报警级别：`"低"` / `"中"` / `"高"` |
 | `logic` | WarningRuleLogic | ✅ | 报警逻辑表达式 |
 | `description` | string | | 描述 |
